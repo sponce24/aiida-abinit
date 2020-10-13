@@ -3,6 +3,7 @@ Calculations provided by aiida_abinit.
 
 Register calculations via the "aiida.calculations" entry point in setup.json.
 """
+from aiida import orm
 from aiida.common import datastructures
 from aiida.engine import CalcJob
 from aiida.orm import SinglefileData
@@ -11,17 +12,17 @@ from aiida.plugins import DataFactory
 DiffParameters = DataFactory('abinit')
 
 
-class DiffCalculation(CalcJob):
+class AbinitCalculation(CalcJob):
     """
-    AiiDA calculation plugin wrapping the diff executable.
+    AiiDA calculation plugin wrapping the abinit executable.
 
-    Simple AiiDA plugin wrapper for 'diffing' two files.
+    Simple AiiDA plugin wrapper for running a basic Abinit DFT calculation.
     """
     @classmethod
     def define(cls, spec):
         """Define inputs and outputs of the calculation."""
         # yapf: disable
-        super(DiffCalculation, cls).define(spec)
+        super(AbinitCalculation, cls).define(spec)
 
         # set default values for AiiDA options
         spec.inputs['metadata']['options']['resources'].default = {
@@ -30,12 +31,14 @@ class DiffCalculation(CalcJob):
                 }
         spec.inputs['metadata']['options']['parser_name'].default = 'abinit'
 
-        # new ports
-        spec.input('metadata.options.output_filename', valid_type=str, default='patch.diff')
-        spec.input('parameters', valid_type=DiffParameters, help='Command line parameters for diff')
-        spec.input('file1', valid_type=SinglefileData, help='First file to be compared.')
-        spec.input('file2', valid_type=SinglefileData, help='Second file to be compared.')
-        spec.output('abinit', valid_type=SinglefileData, help='diff between file1 and file2.')
+        spec.input('metadata.options.input_filename', valid_type=str, default='aiida.in')
+        spec.input('metadata.options.output_filename', valid_type=str, default='aiida.out')
+        spec.output('output_parameters', valid_type=orm.Dict,
+            help='The `output_parameters` output node of the successful calculation.')
+        spec.output('output_structure', valid_type=orm.StructureData, required=False,
+            help='The `output_structure` output node of the successful calculation if present.')
+        spec.output('output_trajectory', valid_type=orm.TrajectoryData, required=False)
+        spec.default_output_node = 'output_parameters'
 
         spec.exit_code(100, 'ERROR_MISSING_OUTPUT_FILES', message='Calculation did not produce all expected output files.')
 
@@ -49,20 +52,14 @@ class DiffCalculation(CalcJob):
         :return: `aiida.common.datastructures.CalcInfo` instance
         """
         codeinfo = datastructures.CodeInfo()
-        codeinfo.cmdline_params = self.inputs.parameters.cmdline_params(
-            file1_name=self.inputs.file1.filename,
-            file2_name=self.inputs.file2.filename)
         codeinfo.code_uuid = self.inputs.code.uuid
+        codeinfo.stdin_name = self.options.input_filename
         codeinfo.stdout_name = self.metadata.options.output_filename
         codeinfo.withmpi = self.inputs.metadata.options.withmpi
 
         # Prepare a `CalcInfo` to be returned to the engine
         calcinfo = datastructures.CalcInfo()
         calcinfo.codes_info = [codeinfo]
-        calcinfo.local_copy_list = [
-            (self.inputs.file1.uuid, self.inputs.file1.filename, self.inputs.file1.filename),
-            (self.inputs.file2.uuid, self.inputs.file2.filename, self.inputs.file2.filename),
-        ]
         calcinfo.retrieve_list = [self.metadata.options.output_filename]
 
         return calcinfo

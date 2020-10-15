@@ -18,7 +18,7 @@
             "abinit = aiida_abinit.data:DiffParameters"
         ],
         "aiida.calculations": [
-            "abinit = aiida_abinit.calculations:DiffCalculation"
+            "abinit = aiida_abinit.calculations:AbinitCalculation"
         ],
         "aiida.parsers": [
             "abinit = aiida_abinit.parsers:DiffParser"

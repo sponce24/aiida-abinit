@@ -6,7 +6,7 @@ Register calculations via the "aiida.calculations" entry point in setup.json.
 from aiida import orm
 from aiida.common import datastructures
 from aiida.engine import CalcJob
-from aiida.orm import SinglefileData
+from aiida.orm import (SinglefileData, StructureData)
 from aiida.plugins import DataFactory
 
 DiffParameters = DataFactory('abinit')
@@ -18,6 +18,7 @@ class AbinitCalculation(CalcJob):
 
     Simple AiiDA plugin wrapper for running a basic Abinit DFT calculation.
     """
+
     @classmethod
     def define(cls, spec):
         """Define inputs and outputs of the calculation."""
@@ -71,12 +72,17 @@ class AbinitCalculation(CalcJob):
             the calculation.
         :return: `aiida.common.datastructures.CalcInfo` instance
         """
+
+        # Create input structure(s).
+        if 'structure' in self.inputs:
+            self._write_structure(self.inputs.sgructure, folder, self.options.input_filename)
+
+
+        # Create code info
         codeinfo = datastructures.CodeInfo()
         codeinfo.code_uuid = self.inputs.code.uuid
         # codeinfo.stdin_name = self.options.input_filename
         # This gives the path to the input file to Abinit rather than passing the input from standard input
-        #print('self.inputs ',self.inputs)
-        print('self.inputs.input_filename ',self.options.input_filename)
         codeinfo.cmdline_params = ['<', self.options.input_filename]
         codeinfo.stdout_name = self.metadata.options.output_filename
         codeinfo.withmpi = self.inputs.metadata.options.withmpi
@@ -84,6 +90,44 @@ class AbinitCalculation(CalcJob):
         # Prepare a `CalcInfo` to be returned to the engine
         calcinfo = datastructures.CalcInfo()
         calcinfo.codes_info = [codeinfo]
+        calcinfo.stdin_name = self.options.input_filename
+        calcinfo.stdout_name = self.options.output_filename       
         calcinfo.retrieve_list = [self.metadata.options.output_filename]
 
         return calcinfo
+
+    @staticmethod
+    def _write_structure(structure, folder, name):
+        """Function that writes a structure and takes care of element tags."""
+
+        # acell 
+        bohr2ang = 0.529177208590000 
+        acell = structure.lattice.abc[0] * np.sqrt(2) / bohr2ang
+        # rprim
+        rprim = np.array([[0.0,0.5,0.5],[0.5,0.0,0.5],[0.5,0.5,0.0]])
+
+        # get ntypat
+        ntypat = len(structure.types_of_species)
+        # get znucl [only work for 1 element now] 
+        znucl = structure.atomic_numbers[0]
+        # get natom
+        natom = structure.num_sites
+        # typat - need to be updated
+        typat = '1 1'
+        # xred
+        xred = structure.frac_coords
+        
+        # Write inside the aiida.in input file. 
+        with io.open(folder.get_abs_path(name), mode="w", encoding="utf-8") as fobj:
+            fobj.write('acell 3*'+str(acell)+'\n')
+            fobj.write('rprim '+str(rprim[:, 0])+'\n')
+            fobj.write('      '+str(rprim[:, 1])+'\n')
+            fobj.write('      '+str(rprim[:, 2])+'\n')
+            fobj.write('ntypat '+str(ntypat)+'\n') 
+            fobj.write('znucl '+str(znucl)+'\n') 
+            fobj.write('natom '+str(natom)+'\n') 
+            fobj.write('typat '+str(typat)+'\n') 
+            fobj.write('xred \n') 
+            for ii in np.arange(natom): 
+              fobj.write('      '+str(xred[:,ii])+'\n')
+

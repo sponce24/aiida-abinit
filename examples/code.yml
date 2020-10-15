@@ -1,0 +1,9 @@
+---
+label: "abinit-9.2.1-ab"
+description: "Abinit v9.2.1"
+input_plugin: "abinit"
+on_computer: true
+remote_abs_path: "/home/sponce/program/abinit-9.2.1/build/src/98_main/abinit"
+computer: "localhost"
+prepend_text: "export ABI_PSPDIR=/home/sponce/program/abinit-9.2.1/tests/Psps_for_tests"
+append_text: " "

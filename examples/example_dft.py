@@ -25,8 +25,8 @@ def example_dft(abinit_code):
     structure = StructureData(pymatgen=mg.Structure.from_file(os.path.join(thisdir, "files", 'Si_mp-149_primitive.cif')))
 
     # Pseudopotentials.
-    #pseudo_file = SinglefileData(file=os.path.join(thisdir, "..", "files", "GTH_POTENTIALS"))
-    os.system('export ABI_PSPDIR=/home/sponce/program/abinit-9.2.1/tests/Psps_for_tests')
+    # You need to add it when setting up the code [prepend_text]
+    #os.system('export ABI_PSPDIR=/home/sponce/program/abinit-9.2.1/tests/Psps_for_tests')
 
     parameters_dict = {
         'ecut'    : 8.0,     # Maximal kinetic energy cut-off, in Hartree

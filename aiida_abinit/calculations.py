@@ -3,13 +3,13 @@ Calculations provided by aiida_abinit.
 
 Register calculations via the "aiida.calculations" entry point in setup.json.
 """
+import io
+import numpy as np
 from aiida import orm
 from aiida.common import datastructures
 from aiida.engine import CalcJob
 from aiida.orm import (SinglefileData, StructureData)
 from aiida.plugins import DataFactory
-
-DiffParameters = DataFactory('abinit')
 
 
 class AbinitCalculation(CalcJob):
@@ -19,6 +19,10 @@ class AbinitCalculation(CalcJob):
     Simple AiiDA plugin wrapper for running a basic Abinit DFT calculation.
     """
 
+    # Defaults.
+    _DEFAULT_INPUT_FILE = 'aiida.in'
+    _DEFAULT_OUTPUT_FILE = 'aiida.out'
+
     @classmethod
     def define(cls, spec):
         """Define inputs and outputs of the calculation."""
@@ -26,8 +30,9 @@ class AbinitCalculation(CalcJob):
         super(AbinitCalculation, cls).define(spec)
 
         # Inputs
-        spec.input('metadata.options.input_filename', valid_type=str, default='aiida.in')
-        spec.input('metadata.options.output_filename', valid_type=str, default='aiida.out')
+        spec.input('metadata.options.input_filename', valid_type=str, default=cls._DEFAULT_INPUT_FILE)
+        spec.input('metadata.options.output_filename', valid_type=str, default=cls._DEFAULT_OUTPUT_FILE)  
+
         spec.input('parameters', valid_type=orm.Dict, help='the input parameters')
         spec.input('structure', valid_type=StructureData, required=False, help='the main input structure')
         spec.input('settings', valid_type=orm.Dict, required=False, help='special settings')        
@@ -62,7 +67,8 @@ class AbinitCalculation(CalcJob):
         spec.default_output_node = 'output_parameters'
 
         # SP: Not sure if I should set this ?
-        # spec.outputs.dynamic = True
+        spec.inputs.dynamic = True
+        spec.outputs.dynamic = True
 
     def prepare_for_submission(self, folder):
         """
@@ -73,17 +79,23 @@ class AbinitCalculation(CalcJob):
         :return: `aiida.common.datastructures.CalcInfo` instance
         """
 
-        # Create input structure(s).
+        # Create input structure(s) and add it to the input file
         if 'structure' in self.inputs:
-            self._write_structure(self.inputs.sgructure, folder, self.options.input_filename)
+            self._write_structure(self.inputs.structure, folder, self.options.input_filename)
 
+        # Add the used defined input parameters to the input file (append)
+        inp = self.inputs.parameters.get_dict()
+        with io.open(folder.get_abs_path(self._DEFAULT_INPUT_FILE), mode="a", encoding="utf-8") as fobj:
+            for ii in inp:
+              fobj.write(str(ii)+' '+str(inp[ii])+'\n')
 
         # Create code info
         codeinfo = datastructures.CodeInfo()
         codeinfo.code_uuid = self.inputs.code.uuid
         # codeinfo.stdin_name = self.options.input_filename
         # This gives the path to the input file to Abinit rather than passing the input from standard input
-        codeinfo.cmdline_params = ['<', self.options.input_filename]
+        #codeinfo.cmdline_params = ['<', self.options.input_filename]
+        codeinfo.cmdline_params = [self.options.input_filename]
         codeinfo.stdout_name = self.metadata.options.output_filename
         codeinfo.withmpi = self.inputs.metadata.options.withmpi
 
@@ -100,34 +112,35 @@ class AbinitCalculation(CalcJob):
     def _write_structure(structure, folder, name):
         """Function that writes a structure and takes care of element tags."""
 
+        str_pymg = structure.get_pymatgen()
         # acell 
         bohr2ang = 0.529177208590000 
-        acell = structure.lattice.abc[0] * np.sqrt(2) / bohr2ang
+        acell = str_pymg.lattice.abc[0] * np.sqrt(2) / bohr2ang
         # rprim
         rprim = np.array([[0.0,0.5,0.5],[0.5,0.0,0.5],[0.5,0.5,0.0]])
 
         # get ntypat
-        ntypat = len(structure.types_of_species)
+        ntypat = len(str_pymg.types_of_species)
         # get znucl [only work for 1 element now] 
-        znucl = structure.atomic_numbers[0]
+        znucl = str_pymg.atomic_numbers[0]
         # get natom
-        natom = structure.num_sites
+        natom = str_pymg.num_sites
         # typat - need to be updated
         typat = '1 1'
         # xred
-        xred = structure.frac_coords
+        xred = str_pymg.frac_coords
         
         # Write inside the aiida.in input file. 
         with io.open(folder.get_abs_path(name), mode="w", encoding="utf-8") as fobj:
             fobj.write('acell 3*'+str(acell)+'\n')
-            fobj.write('rprim '+str(rprim[:, 0])+'\n')
-            fobj.write('      '+str(rprim[:, 1])+'\n')
-            fobj.write('      '+str(rprim[:, 2])+'\n')
+            fobj.write('rprim '+str(rprim[0, 0])+' '+str(rprim[1, 0])+' '+str(rprim[2, 0])+'\n')
+            fobj.write('      '+str(rprim[0, 1])+' '+str(rprim[1, 1])+' '+str(rprim[2, 1])+'\n')
+            fobj.write('      '+str(rprim[0, 2])+' '+str(rprim[1, 2])+' '+str(rprim[2, 2])+'\n')
             fobj.write('ntypat '+str(ntypat)+'\n') 
             fobj.write('znucl '+str(znucl)+'\n') 
             fobj.write('natom '+str(natom)+'\n') 
             fobj.write('typat '+str(typat)+'\n') 
             fobj.write('xred \n') 
             for ii in np.arange(natom): 
-              fobj.write('      '+str(xred[:,ii])+'\n')
+              fobj.write('      '+str(xred[ii, 0])+' '+str(xred[ii, 1])+' '+str(xred[ii, 2])+'\n')
 

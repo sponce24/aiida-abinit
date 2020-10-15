@@ -26,17 +26,19 @@ def example_dft(abinit_code):
 
     # Pseudopotentials.
     #pseudo_file = SinglefileData(file=os.path.join(thisdir, "..", "files", "GTH_POTENTIALS"))
-    os.system('export $ABI_PSPDIR=/home/sponce/program/abinit-9.2.1/tests/Psps_for_tests')
+    os.system('export ABI_PSPDIR=/home/sponce/program/abinit-9.2.1/tests/Psps_for_tests')
 
     parameters_dict = {
-        'ntypat'   :  1,
-        'znucl'    :  1,
-        'natom'    :  2,
-        'ecut'     : 10,
-        'kptopt'   :  0,
-        'nkpt'     :  1,
-        'nstep'    : 10,
-        'toldfe'   : 1.0e-6,
+        'ecut'    : 8.0,     # Maximal kinetic energy cut-off, in Hartree
+        'kptopt'  : 1,       # Option for the automatic generation of k points
+        'ngkpt'   : '2 2 2', # This is a 2x2x2 grid based on the primitive vectors
+        'nshiftk' : 1,       # of the reciprocal space (that form a BCC lattice !)
+        'shiftk'  : '0 0 0',
+        'nstep'   : 20,      # Maximal number of SCF cycles
+        'toldfe'  : 1.0e-6,  # Will stop when, twice in a row, the difference 
+                             # between two consecutive evaluations of total energy 
+                             # differ by less than toldfe (in Hartree)
+        'diemac'  : 12.0,    # Precondition for SCF cycle using a model dielectric
         'pp_dirpath' : '\"$ABI_PSPDIR\"',
         'pseudos'    : '\"PseudosTM_pwteter/14si.pspnc\"'
     }

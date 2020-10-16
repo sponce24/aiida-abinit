@@ -5,77 +5,16 @@
 
 # aiida-abinit
 
-The AiiDA plugin for ABINIT.
-
-This plugin is the default output of the
-[AiiDA plugin cutter](https://github.com/aiidateam/aiida-plugin-cutter),
-intended to help developers get started with their AiiDA plugins.
-
-## Repository contents
-
-* [`.github/`](.github/): [Github Actions](https://github.com/features/actions) configuration
-  * [`ci.yml`](.github/workflows/ci.yml): runs tests, checks test coverage and builds documentation at every new commit
-  * [`publish-on-pypi.yml`](.github/workflows/publish-on-pypi.yml): automatically deploy git tags to PyPI - just generate a [PyPI API token](https://pypi.org/help/#apitoken) for your PyPI account and add it to the `pypi_token` secret of your github repository
-* [`aiida_abinit/`](aiida_abinit/): The main source code of the plugin package
-  * [`data/`](aiida_abinit/data/): A new `DiffParameters` data class, used as input to the `DiffCalculation` `CalcJob` class
-  * [`calculations.py`](aiida_abinit/calculations.py): A new `DiffCalculation` `CalcJob` class
-  * [`cli.py`](aiida_abinit/cli.py): Extensions of the `verdi data` command line interface for the `DiffParameters` class
-  * [`helpers.py`](aiida_abinit/helpers.py): Helpers for setting up an AiiDA code for `diff` automatically
-  * [`parsers.py`](aiida_abinit/parsers.py): A new `Parser` for the `DiffCalculation`
-* [`docs/`](docs/): A documentation template ready for publication on [Read the Docs](http://aiida-diff.readthedocs.io/en/latest/)
-* [`examples/`](examples/): An example of how to submit a calculation using this plugin
-* [`tests/`](tests/): Basic regression tests using the [pytest](https://docs.pytest.org/en/latest/) framework (submitting a calculation, ...). Install `pip install -e .[testing]` and run `pytest`.
-* [`.coveragerc`](.coveragerc): Configuration of [coverage.py](https://coverage.readthedocs.io/en/latest) tool reporting which lines of your plugin are covered by tests
-* [`.gitignore`](.gitignore): Telling git which files to ignore
-* [`.pre-commit-config.yaml`](.pre-commit-config.yaml): Configuration of [pre-commit hooks](https://pre-commit.com/) that sanitize coding style and check for syntax errors. Enable via `pip install -e .[pre-commit] && pre-commit install`
-* [`.readthedocs.yml`](.readthedocs.yml): Configuration of documentation build for [Read the Docs](https://readthedocs.org/)
-* [`LICENSE`](LICENSE): License for your plugin
-* [`MANIFEST.in`](MANIFEST.in): Configure non-Python files to be included for publication on [PyPI](https://pypi.org/)
-* [`README.md`](README.md): This file
-* [`conftest.py`](conftest.py): Configuration of fixtures for [pytest](https://docs.pytest.org/en/latest/)
-* [`pytest.ini`](pytest.ini): Configuration of [pytest](https://docs.pytest.org/en/latest/) test discovery
-* [`setup.json`](setup.json): Plugin metadata for registration on [PyPI](https://pypi.org/) and the [AiiDA plugin registry](https://aiidateam.github.io/aiida-registry/) (including entry points)
-* [`setup.py`](setup.py): Installation script for pip / [PyPI](https://pypi.org/)
+![ABINIT](miscellaneous/logos/logo-abinit-2015.png)
 
 
-See also the following video sequences from the 2019-05 AiiDA tutorial:
+The AiiDA plugin for [ABINIT](https://www.abinit.org/).
 
- * [aiida-diff setup.json](https://www.youtube.com/watch?v=2CxiuiA1uVs&t=240s)
- * [run aiida-diff example calculation](https://www.youtube.com/watch?v=2CxiuiA1uVs&t=403s)
- * [aiida-diff CalcJob plugin](https://www.youtube.com/watch?v=2CxiuiA1uVs&t=685s)
- * [aiida-diff Parser plugin](https://www.youtube.com/watch?v=2CxiuiA1uVs&t=936s)
- * [aiida-diff computer/code helpers](https://www.youtube.com/watch?v=2CxiuiA1uVs&t=1238s)
- * [aiida-diff input data (with validation)](https://www.youtube.com/watch?v=2CxiuiA1uVs&t=1353s)
- * [aiida-diff cli](https://www.youtube.com/watch?v=2CxiuiA1uVs&t=1621s)
- * [aiida-diff tests](https://www.youtube.com/watch?v=2CxiuiA1uVs&t=1931s)
- * [Adding your plugin to the registry](https://www.youtube.com/watch?v=760O2lDB-TM&t=112s)
- * [pre-commit hooks](https://www.youtube.com/watch?v=760O2lDB-TM&t=333s)
+[ABINIT](https://www.abinit.org/) is a software suite to calculate the optical, mechanical, vibrational, and other observable properties of materials. Starting from the quantum equations of density functional theory, you can build up to advanced applications with perturbation theories based on DFT, and many-body Green's functions (GW and DMFT) .
+ABINIT can calculate molecules, nanostructures and solids with any chemical composition, and comes with several complete and robust tables of atomic potentials.
+On-line tutorials are available for the main features of the code, and several schools and workshops are organized each year.
 
-For more information, see the [developer guide](https://aiida-diff.readthedocs.io/en/latest/developer_guide) of your plugin.
-
-
-## Features
-
- * Add input files using `SinglefileData`:
-   ```python
-   SinglefileData = DataFactory('singlefile')
-   inputs['file1'] = SinglefileData(file='/path/to/file1')
-   inputs['file2'] = SinglefileData(file='/path/to/file2')
-   ```
-
- * Specify command line options via a python dictionary and `DiffParameters`:
-   ```python
-   d = { 'ignore-case': True }
-   DiffParameters = DataFactory('abinit')
-   inputs['parameters'] = DiffParameters(dict=d)
-   ```
-
- * `DiffParameters` dictionaries are validated using [voluptuous](https://github.com/alecthomas/voluptuous).
-   Find out about supported options:
-   ```python
-   DiffParameters = DataFactory('abinit')
-   print(DiffParameters.schema.schema)
-   ```
+This plugin was created using [AiiDA plugin cutter](https://github.com/aiidateam/aiida-plugin-cutter).
 
 ## Installation
 
@@ -85,7 +24,6 @@ verdi quicksetup  # better to set up a new profile
 verdi plugin list aiida.calculations  # should now show your calclulation plugins
 ```
 
-
 ## Usage
 
 Here goes a complete example of how to submit a test calculation using this plugin.
@@ -94,7 +32,7 @@ A quick demo of how to submit a calculation:
 ```shell
 verdi daemon start     # make sure the daemon is running
 cd examples
-./example_01.py        # run test calculation
+./example_dft.py       # run DFT test calculation
 verdi process list -a  # check record of calculation
 ```
 
@@ -116,12 +54,21 @@ pytest -v  # discover and run all tests
 
 See the [developer guide](http://aiida-abinit.readthedocs.io/en/latest/developer_guide/index.html) for more information.
 
+## Acknowledgements
+
+This work was supported by the the European Unions Horizon 2020 Research and Innovation Programme, 
+under the [Marie Skłodowska-Curie Grant Agreement SELPH2D No. 839217](https://cordis.europa.eu/project/id/839217).
+
+![MSC](miscellaneous/logos/MSC-logo.png)
+
 ## License
 
 MIT
 
-
 ## Contact
 
-samuel.pon@gmail.com
+The AiiDA-abinit plugin is developed and maintained by 
+
+* [Samuel Poncé](https://www.samuelponce.com/) - samuel.pon@gmail.com
+* [Guido Petretto](https://uclouvain.be/fr/repertoires/guido.petretto)
 

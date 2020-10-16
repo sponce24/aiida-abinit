@@ -11,6 +11,7 @@ from aiida.engine import CalcJob
 from aiida.orm import (SinglefileData, StructureData)
 from aiida.plugins import DataFactory
 
+from abipy.core.structure import Structure
 
 class AbinitCalculation(CalcJob):
     """
@@ -79,15 +80,16 @@ class AbinitCalculation(CalcJob):
         :return: `aiida.common.datastructures.CalcInfo` instance
         """
 
-        # Create input structure(s) and add it to the input file
+        # Add the used defined input parameters to the input file
+        inp = self.inputs.parameters.get_dict()
+        with io.open(folder.get_abs_path(self._DEFAULT_INPUT_FILE), mode="w", encoding="utf-8") as fobj:
+            for ii in inp:
+              fobj.write(str(ii)+' '+str(inp[ii])+'\n')
+
+        # Create input structure(s) and add it to the input file (append)
         if 'structure' in self.inputs:
             self._write_structure(self.inputs.structure, folder, self.options.input_filename)
 
-        # Add the used defined input parameters to the input file (append)
-        inp = self.inputs.parameters.get_dict()
-        with io.open(folder.get_abs_path(self._DEFAULT_INPUT_FILE), mode="a", encoding="utf-8") as fobj:
-            for ii in inp:
-              fobj.write(str(ii)+' '+str(inp[ii])+'\n')
 
         # Create code info
         codeinfo = datastructures.CodeInfo()
@@ -108,39 +110,34 @@ class AbinitCalculation(CalcJob):
 
         return calcinfo
 
-    @staticmethod
-    def _write_structure(structure, folder, name):
+    def _write_structure(self, structure, folder, name):
         """Function that writes a structure and takes care of element tags."""
-
-        str_pymg = structure.get_pymatgen()
-        # acell 
-        bohr2ang = 0.529177208590000 
-        acell = str_pymg.lattice.abc[0] * np.sqrt(2) / bohr2ang
-        # rprim
-        rprim = np.array([[0.0,0.5,0.5],[0.5,0.0,0.5],[0.5,0.5,0.0]])
-
-        # get ntypat
-        ntypat = len(str_pymg.types_of_species)
-        # get znucl [only work for 1 element now] 
-        znucl = str_pymg.atomic_numbers[0]
-        # get natom
-        natom = str_pymg.num_sites
-        # typat - need to be updated
-        typat = '1 1'
-        # xred
-        xred = str_pymg.frac_coords
         
+        # Transform the AiiDA structure object to a pymagen structure object0
+        str_pymg = structure.get_pymatgen()
+        # Transform a pymagen structure object to an abipy structure object.
+        str_abipy = Structure.from_sites(str_pymg)
+        # Extract the abinit variables from the abipy structure object.  
+        str_ab = str_abipy.to_abivars()
+
         # Write inside the aiida.in input file. 
-        with io.open(folder.get_abs_path(name), mode="w", encoding="utf-8") as fobj:
-            fobj.write('acell 3*'+str(acell)+'\n')
-            fobj.write('rprim '+str(rprim[0, 0])+' '+str(rprim[1, 0])+' '+str(rprim[2, 0])+'\n')
-            fobj.write('      '+str(rprim[0, 1])+' '+str(rprim[1, 1])+' '+str(rprim[2, 1])+'\n')
-            fobj.write('      '+str(rprim[0, 2])+' '+str(rprim[1, 2])+' '+str(rprim[2, 2])+'\n')
-            fobj.write('ntypat '+str(ntypat)+'\n') 
-            fobj.write('znucl '+str(znucl)+'\n') 
-            fobj.write('natom '+str(natom)+'\n') 
-            fobj.write('typat '+str(typat)+'\n') 
+        with io.open(folder.get_abs_path(name), mode="a", encoding="utf-8") as fobj:
+            fobj.write('acell '+self.ar2str(str_ab["acell"], 3)+'\n')
+            fobj.write('rprim '+self.ar2str(str_ab["rprim"][:, 0], 3)+'\n')
+            fobj.write('      '+self.ar2str(str_ab["rprim"][:, 1], 3)+'\n')
+            fobj.write('      '+self.ar2str(str_ab["rprim"][:, 2], 3)+'\n')
+            fobj.write('ntypat '+str(str_ab["ntypat"])+'\n') 
+            fobj.write('znucl '+self.ar2str(str_ab["znucl"], str_ab["ntypat"])+'\n') 
+            fobj.write('natom '+str(str_ab["natom"])+'\n') 
+            fobj.write('typat '+self.ar2str(str_ab["typat"], str_ab["natom"]))+'\n') 
             fobj.write('xred \n') 
-            for ii in np.arange(natom): 
-              fobj.write('      '+str(xred[ii, 0])+' '+str(xred[ii, 1])+' '+str(xred[ii, 2])+'\n')
+            for ii in np.arange(str_ab["natom"]): 
+                fobj.write('      '+self.ar2str(str_ab["xred"][ii, :], 3) +'\n')
+
+    def ar2str(self, array, dim):
+        """Function that transform a dim elements array into a string"""
+        string = ' '
+        for ii in np.arange(dim):
+          string += str(array[ii])+' '
+        return string
 

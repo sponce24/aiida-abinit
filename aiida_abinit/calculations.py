@@ -23,6 +23,8 @@ class AbinitCalculation(CalcJob):
     # Defaults.
     _DEFAULT_INPUT_FILE = 'aiida.in'
     _DEFAULT_OUTPUT_FILE = 'aiida.out'
+    _DEFAULT_PROJECT_NAME = 'aiida'
+    _DEFAULT_GSR_FILE_NAME = _DEFAULT_PROJECT_NAME + 'o_GSR.nc'
 
     @classmethod
     def define(cls, spec):
@@ -106,7 +108,10 @@ class AbinitCalculation(CalcJob):
         calcinfo.codes_info = [codeinfo]
         calcinfo.stdin_name = self.options.input_filename
         calcinfo.stdout_name = self.options.output_filename       
-        calcinfo.retrieve_list = [self.metadata.options.output_filename]
+        #calcinfo.retrieve_list = [self.metadata.options.output_filename]
+        calcinfo.retrieve_list = [self._DEFAULT_OUTPUT_FILE, self._DEFAULT_GSR_FILE_NAME]
+        #calcinfo.retrieve_list += settings.pop('additional_retrieve_list', [])
+
 
         return calcinfo
 
@@ -129,7 +134,7 @@ class AbinitCalculation(CalcJob):
             fobj.write('ntypat '+str(str_ab["ntypat"])+'\n') 
             fobj.write('znucl '+self.ar2str(str_ab["znucl"], str_ab["ntypat"])+'\n') 
             fobj.write('natom '+str(str_ab["natom"])+'\n') 
-            fobj.write('typat '+self.ar2str(str_ab["typat"], str_ab["natom"]))+'\n') 
+            fobj.write('typat '+self.ar2str(str_ab["typat"], str_ab["natom"])+'\n') 
             fobj.write('xred \n') 
             for ii in np.arange(str_ab["natom"]): 
                 fobj.write('      '+self.ar2str(str_ab["xred"][ii, :], 3) +'\n')

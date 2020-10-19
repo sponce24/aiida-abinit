@@ -21,7 +21,7 @@
             "abinit = aiida_abinit.calculations:AbinitCalculation"
         ],
         "aiida.parsers": [
-            "abinit = aiida_abinit.parsers:DiffParser"
+            "abinit = aiida_abinit.parsers:AbinitParser"
         ],
         "aiida.cmdline.data": [
             "abinit = aiida_abinit.cli:data_cli"

@@ -5,6 +5,7 @@ from aiida.engine import ExitCode
 from aiida.parsers.parser import Parser
 from aiida.plugins import CalculationFactory
 from aiida.plugins import DataFactory
+from aiida.orm import Dict
 
 import abipy.abilab as abilab
 from abipy.flowtk import events
@@ -47,7 +48,8 @@ class AbinitParser(Parser):
     def _parse_GSR(self):
         """Parser for the Abnit GSR file that contains most information"""
 
-        from aiida_abinit.utils import parse_abinit_GSR
+        # Initialize the result dictionary
+        result_dict = {"exceeded_walltime": False}
 
         # Output file - aiida.out
         fname = self.node.get_attribute('output_filename')

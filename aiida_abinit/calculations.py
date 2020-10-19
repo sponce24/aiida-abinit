@@ -35,6 +35,7 @@ class AbinitCalculation(CalcJob):
         # Inputs
         spec.input('metadata.options.input_filename', valid_type=str, default=cls._DEFAULT_INPUT_FILE)
         spec.input('metadata.options.output_filename', valid_type=str, default=cls._DEFAULT_OUTPUT_FILE)  
+        spec.input('metadata.options.output_gsr', valid_type=str, default=cls._DEFAULT_GSR_FILE_NAME)  
 
         spec.input('parameters', valid_type=orm.Dict, help='the input parameters')
         spec.input('structure', valid_type=StructureData, required=False, help='the main input structure')
@@ -108,7 +109,7 @@ class AbinitCalculation(CalcJob):
         calcinfo.codes_info = [codeinfo]
         calcinfo.stdin_name = self.options.input_filename
         calcinfo.stdout_name = self.options.output_filename       
-        #calcinfo.retrieve_list = [self.metadata.options.output_filename]
+        calcinfo.retrieve_list = [self.metadata.options.output_filename]
         calcinfo.retrieve_list = [self._DEFAULT_OUTPUT_FILE, self._DEFAULT_GSR_FILE_NAME]
         #calcinfo.retrieve_list += settings.pop('additional_retrieve_list', [])
 

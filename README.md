@@ -6,9 +6,9 @@
 # aiida-abinit
 
 ![ABINIT](miscellaneous/logos/logo-abinit-2015.png)
+![AiiDA](miscellaneous/logos/AiiDA_transparent_logo.png)
 
-
-The AiiDA plugin for [ABINIT](https://www.abinit.org/).
+The [AiiDA](http://www.aiida.net/) plugin for [ABINIT](https://www.abinit.org/).
 
 [ABINIT](https://www.abinit.org/) is a software suite to calculate the optical, mechanical, vibrational, and other observable properties of materials. Starting from the quantum equations of density functional theory, you can build up to advanced applications with perturbation theories based on DFT, and many-body Green's functions (GW and DMFT) .
 ABINIT can calculate molecules, nanostructures and solids with any chemical composition, and comes with several complete and robust tables of atomic potentials.

@@ -40,8 +40,12 @@ Next you need to create an .ac file to tell the code where these new libs are
 ```shell
 vim max.ac 
 ```
-Add the lines that the `build-abinit-fallbacks.sh` reported you to the `max.ac` file. For example:
+Add the lines that the `build-abinit-fallbacks.sh` reported you to the `max.ac` file. 
+You should also add the path to your MPI installation (like openmpi) if you want to run in parallel. 
+For example:
 ```shell
+with_mpi=/home/max/codes/openmpi-4.0.2/
+enable_mpi_io="yes"
 with_libxc=/home/max/codes/abinit-9.2.1/build/fallbacks/install_fb/gnu/7.5/libxc/4.3.4
 with_hdf5=/home/max/codes/abinit-9.2.1/build/fallbacks/install_fb/gnu/7.5/hdf5/1.10.6
 with_netcdf=/home/max/codes/abinit-9.2.1/build/fallbacks/install_fb/gnu/7.5/netcdf4/4.6.3

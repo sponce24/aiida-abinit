@@ -18,7 +18,7 @@ This plugin was created using [AiiDA plugin cutter](https://github.com/aiidateam
 
 ## Installation
 
-# Install Abinit (here for Abinit v.9.2.1)
+### Install Abinit (here for Abinit v.9.2.1)
 ```shell
 wget https://www.abinit.org/sites/default/files/packages/abinit-9.2.1.tar.gz
 tar -xvf abinit-9.2.1.tar.gz
@@ -66,13 +66,63 @@ cd ../tests/
 python runtests.py --build-tree=/home/max/codes/abinit-9.2.1/build
 ```
 
+### Install AiiDA
 
-
+First create a virtual python environement with conda (install it if you do not have it):
 ```shell
-pip install aiida-abinit
-verdi quicksetup  # better to set up a new profile
-verdi plugin list aiida.calculations  # should now show your calclulation plugins
+conda create -n aiida-abinit -c conda-forge aiida-core=1.4.2 aiida-core.services=1.4.2
 ```
+
+Then activate your virtual environement
+```shell
+conda activate aiida-abinit
+reentry scan
+```
+
+You should then clone this GitHub repo
+```shell
+git clone https://github.com/sponce24/aiida-abinit
+cd aiida-abinit
+pip install -e . --ignore-installed --use-feature=2020-resolver
+```
+
+This should install `aiida-core` and `aiida-abinit`. 
+
+You should now setup the computer and the code:
+```shell
+cd examples
+```
+
+You should open the ``computer.yml`` and adapt it to your environement. 
+Then run:
+```shell
+verdi computer setup --config computer.yml
+```
+This will setup your current local machine as the computer. You can also adapt the ``computer.yml`` to setup a remote machine. 
+If you do:
+```shell
+verdi computer list
+```
+It should show your computer. 
+
+Now setup the Abinit code. Also edit the ``code.yml`` indicating your path. 
+Then do:
+```shell
+verdi code setup --config code.yml
+```
+This should setup the Abinit code. You can verify that you have it by doing:
+```shell
+verdi code list
+```
+
+Finally, you should make sure that you have the abinit calculation plugin by doing:
+```shell
+verdi plugin list aiida.calculations 
+```
+
+This should show ``* abinit``
+
+You are now all setup. Congratulations !!
 
 ## Usage
 

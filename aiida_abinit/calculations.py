@@ -4,14 +4,15 @@ Calculations provided by aiida_abinit.
 Register calculations via the "aiida.calculations" entry point in setup.json.
 """
 import io
-import numpy as np
 from aiida import orm
 from aiida.common import datastructures
 from aiida.engine import CalcJob
 from aiida.orm import (SinglefileData, StructureData)
 from aiida.plugins import DataFactory
 
-from abipy.core.structure import Structure
+from abipy.abio.variable import InputVariable
+from pymatgen.io.abinit.abiobjects import structure_to_abivars
+
 
 class AbinitCalculation(CalcJob):
     """
@@ -85,14 +86,17 @@ class AbinitCalculation(CalcJob):
 
         # Add the used defined input parameters to the input file
         inp = self.inputs.parameters.get_dict()
-        with io.open(folder.get_abs_path(self._DEFAULT_INPUT_FILE), mode="w", encoding="utf-8") as fobj:
-            for ii in inp:
-              fobj.write(str(ii)+' '+str(inp[ii])+'\n')
 
-        # Create input structure(s) and add it to the input file (append)
+        # Add the structure related variables to the dictionary
         if 'structure' in self.inputs:
-            self._write_structure(self.inputs.structure, folder, self.options.input_filename)
+            inp.update(structure_to_abivars(self.inputs.structure.get_pymatgen()))
 
+        lines = []
+        for inp_var, value in inp.items():
+            lines.append(str(InputVariable(inp_var, value)))
+
+        with io.open(folder.get_abs_path(self._DEFAULT_INPUT_FILE), mode="w", encoding="utf-8") as fobj:
+            fobj.writelines(lines)
 
         # Create code info
         codeinfo = datastructures.CodeInfo()
@@ -113,37 +117,4 @@ class AbinitCalculation(CalcJob):
         calcinfo.retrieve_list = [self._DEFAULT_OUTPUT_FILE, self._DEFAULT_GSR_FILE_NAME]
         #calcinfo.retrieve_list += settings.pop('additional_retrieve_list', [])
 
-
         return calcinfo
-
-    def _write_structure(self, structure, folder, name):
-        """Function that writes a structure and takes care of element tags."""
-        
-        # Transform the AiiDA structure object to a pymagen structure object0
-        str_pymg = structure.get_pymatgen()
-        # Transform a pymagen structure object to an abipy structure object.
-        str_abipy = Structure.from_sites(str_pymg)
-        # Extract the abinit variables from the abipy structure object.  
-        str_ab = str_abipy.to_abivars()
-
-        # Write inside the aiida.in input file. 
-        with io.open(folder.get_abs_path(name), mode="a", encoding="utf-8") as fobj:
-            fobj.write('acell '+self.ar2str(str_ab["acell"], 3)+'\n')
-            fobj.write('rprim '+self.ar2str(str_ab["rprim"][:, 0], 3)+'\n')
-            fobj.write('      '+self.ar2str(str_ab["rprim"][:, 1], 3)+'\n')
-            fobj.write('      '+self.ar2str(str_ab["rprim"][:, 2], 3)+'\n')
-            fobj.write('ntypat '+str(str_ab["ntypat"])+'\n') 
-            fobj.write('znucl '+self.ar2str(str_ab["znucl"], str_ab["ntypat"])+'\n') 
-            fobj.write('natom '+str(str_ab["natom"])+'\n') 
-            fobj.write('typat '+self.ar2str(str_ab["typat"], str_ab["natom"])+'\n') 
-            fobj.write('xred \n') 
-            for ii in np.arange(str_ab["natom"]): 
-                fobj.write('      '+self.ar2str(str_ab["xred"][ii, :], 3) +'\n')
-
-    def ar2str(self, array, dim):
-        """Function that transform a dim elements array into a string"""
-        string = ' '
-        for ii in np.arange(dim):
-          string += str(array[ii])+' '
-        return string
-

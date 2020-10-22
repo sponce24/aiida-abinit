@@ -18,6 +18,56 @@ This plugin was created using [AiiDA plugin cutter](https://github.com/aiidateam
 
 ## Installation
 
+# Install Abinit (here for Abinit v.9.2.1)
+```shell
+wget https://www.abinit.org/sites/default/files/packages/abinit-9.2.1.tar.gz
+tar -xvf abinit-9.2.1.tar.gz
+cd abinit-9.2.1
+mkdir build
+cd build
+../configure
+```
+
+The configure will likely tel you that you have missing mandatory libraries (Netcdf etc).
+```shell
+cd fallbacks
+./build-abinit-fallbacks.sh
+```
+
+This will build HDF5, libXC, NetCDF and NetCDF Fortran (it will take time to compile ... go get a coffee)
+Next you need to create an .ac file to tell the code where these new libs are
+
+```shell
+vim max.ac 
+```
+Add the lines that the `build-abinit-fallbacks.sh` reported you to the `max.ac` file. For example:
+```shell
+with_libxc=/home/max/codes/abinit-9.2.1/build/fallbacks/install_fb/gnu/7.5/libxc/4.3.4
+with_hdf5=/home/max/codes/abinit-9.2.1/build/fallbacks/install_fb/gnu/7.5/hdf5/1.10.6
+with_netcdf=/home/max/codes/abinit-9.2.1/build/fallbacks/install_fb/gnu/7.5/netcdf4/4.6.3
+with_netcdf_fortran=/home/max/codes/abinit-9.2.1/build/fallbacks/install_fb/gnu/7.5/netcdf4_fortran/4.5.2
+with_xmlf90=/home/max/codes/abinit-9.2.1/build/fallbacks/install_fb/gnu/7.5/xmlf90/1.5.3.1
+with_libpsml=/home/max/codes/abinit-9.2.1/build/fallbacks/install_fb/gnu/7.5/libpsml/1.1.7
+```
+Then re-run the configure
+```shell
+../configure --with-config-file=max.ac
+make
+```
+It should work and be compiled. 
+You can export the 'abinit' executable with
+```shell
+export PATH=/home/max/codes/abinit-9.2.1/build/src/98_main:$PATH
+```
+
+And do the tests to make sure everything works:
+```shell
+cd ../tests/
+python runtests.py --build-tree=/home/max/codes/abinit-9.2.1/build
+```
+
+
+
 ```shell
 pip install aiida-abinit
 verdi quicksetup  # better to set up a new profile

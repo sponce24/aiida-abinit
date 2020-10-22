@@ -59,6 +59,9 @@ Then re-run the configure
 make
 ```
 It should work and be compiled. 
+
+If you have trouble installing Abinit, please visit the [Abinit documentation](https://docs.abinit.org/installation/).
+
 You can export the 'abinit' executable with
 ```shell
 export PATH=/home/max/codes/abinit-9.2.1/build/src/98_main:$PATH

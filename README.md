@@ -132,7 +132,7 @@ A quick demo of how to submit a calculation:
 ```shell
 verdi daemon start     # make sure the daemon is running
 cd examples
-./example_dft.py       # run DFT test calculation
+python example_dft.py --code abinit-9.2.1-ab@localhost # run DFT test calculation
 verdi process list -a  # check record of calculation
 ```
 

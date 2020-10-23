@@ -93,7 +93,7 @@ class AbinitCalculation(CalcJob):
 
         lines = []
         for inp_var, value in inp.items():
-            lines.append(str(InputVariable(inp_var, value)))
+            lines.append(str(InputVariable(inp_var, value))+' \n')
 
         with io.open(folder.get_abs_path(self._DEFAULT_INPUT_FILE), mode="w", encoding="utf-8") as fobj:
             fobj.writelines(lines)

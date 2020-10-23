@@ -22,7 +22,7 @@ def example_dft(abinit_code):
     thisdir = os.path.dirname(os.path.realpath(__file__))
 
     # Structure.
-    structure = StructureData(pymatgen=mg.Structure.from_file(os.path.join(thisdir, "files", 'Si_mp-149_primitive.cif')))
+    structure = StructureData(pymatgen=mg.Structure.from_file(os.path.join(thisdir, "files", 'Si.cif')))
 
     # Pseudopotentials.
     # You need to add it when setting up the code [prepend_text]

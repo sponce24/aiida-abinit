@@ -11,8 +11,11 @@ import abipy.abilab as abilab
 from abipy.flowtk import events
 from abipy.dynamics.hist import HistFile
 from pymatgen.core.trajectory import Trajectory
+import netCDF4 as nc
+import numpy as np
 
 StructureData = DataFactory('structure')
+ArrayData = DataFactory('array')
 
 class AbinitParser(Parser):
     """
@@ -118,10 +121,48 @@ class AbinitParser(Parser):
         path = self.node.get_remote_workdir()
 
         with HistFile(path+'/'+fname) as h:
-            trajectory = Trajectory.from_structures(h.structures)
+            traj_struct = Trajectory.from_structures(h.structures)
+            n_steps = len(h.structures)
 
-        self.out("output_trajectory", Dict(dict=trajectory))
+        # AiiDA trajectory
+        output_trajectory = ArrayData()
 
-        return StructureData(pymatgen=trajectory)
+        name_spec = np.array([site.specie.symbol for site in traj_struct.get_structure(0).sites])
+
+        cells = np.zeros((n_steps, 3, 3))
+        positions = np.zeros((n_steps, len(name_spec), 3))
+        for i in range(n_steps):
+            structure = traj_struct.get_structure(i)
+            cells[i, :, :] = structure.lattice.matrix
+            positions[i, :, :] = np.array([site.coords for site in structure.sites])
+ 
+        output_trajectory.set_array("atomic_species_name", name_spec)
+        output_trajectory.set_array("cells", cells)
+        output_trajectory.set_array("postitions", positions)
+
+        stress = np.zeros((n_steps, 3, 3)) 
+
+        root = nc.Dataset(path+'/'+fname,'r')
+        stress_voigt = root.variables['strten'][:,:].data
+        stress[:, 0, 0] = stress_voigt[:, 0] 
+        stress[:, 1, 1] = stress_voigt[:, 1] 
+        stress[:, 2, 2] = stress_voigt[:, 2] 
+        stress[:, 1, 2] = stress_voigt[:, 3] 
+        stress[:, 0, 2] = stress_voigt[:, 4] 
+        stress[:, 0, 1] = stress_voigt[:, 5] 
+        stress[:, 2, 1] = stress[:, 1, 2]
+        stress[:, 2, 0] = stress[:, 0, 2]
+        stress[:, 1, 0] = stress[:, 0, 1]
+
+        energy = root.variables['etotal'][:].data
+        forces_cart = root.variables['fcart'][:,:,:].data
+
+        output_trajectory.set_array("energy", energy)
+        output_trajectory.set_array("forces", forces_cart)
+        output_trajectory.set_array("stress", stress)
+
+        self.out("output_trajectory", output_trajectory)
+
+        return None
 
 

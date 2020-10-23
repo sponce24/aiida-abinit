@@ -79,6 +79,8 @@ class AbinitCalculation(CalcJob):
         spec.output('output_parameters', valid_type=orm.Dict, required=True, help='The result of the Abinit calculation.')
         spec.output('output_structure', valid_type=orm.StructureData, required=False,
             help='Optional relaxed crystal structure')
+        spec.output('output_trajectory', valid_type=orm.Dict, required=False,
+            help='Optional trajectory')
         spec.default_output_node = 'output_parameters'
 
         # SP: Not sure if I should set this ?

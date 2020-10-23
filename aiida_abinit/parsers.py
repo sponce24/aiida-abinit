@@ -120,7 +120,7 @@ class AbinitParser(Parser):
         with HistFile(path+'/'+fname) as h:
             trajectory = Trajectory.from_structures(h.structures)
 
-        self.out("output_parameters", Dict(dict=result_dict))
+        self.out("output_trajectory", Dict(dict=trajectory))
 
         return StructureData(pymatgen=trajectory)
 

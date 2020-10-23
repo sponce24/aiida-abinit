@@ -41,11 +41,11 @@ def example_base(code):
                 'ionmov'  : 22,      # Atoms relaxation
                 'tolmxf'  : 5.0e-5,  # Tolerence on the maximal force
                 'ecutsm'  : 0.5,     # Energy cutoff smearing, in Hartree
-                'ecut'    : 8.0,     # Maximal kinetic energy cut-off, in Hartree
+                'ecut'    : 20.0,    # Maximal kinetic energy cut-off, in Hartree
                 'kptopt'  : 1,       # Option for the automatic generation of k points
-                'ngkpt'   : '2 2 2', # This is a 2x2x2 grid based on the primitive vectors
-                'nshiftk' : 1,       # of the reciprocal space (that form a BCC lattice !)
-                'shiftk'  : '0 0 0',
+                'ngkpt'   : '4 4 4', # This is a 2x2x2 grid based on the primitive vectors
+                'nshiftk' : 4,       # of the reciprocal space (that form a BCC lattice !)
+                'shiftk'  : '0.5 0.5 0.5 \n 0.5 0.0 0.0 \n 0.0 0.5 0.0 \n 0.0 0.0 0.5',
                 'nstep'   : 20,      # Maximal number of SCF cycles
                 'toldfe'  : 1.0e-6,  # Will stop when, twice in a row, the difference 
                                      # between two consecutive evaluations of total energy 
@@ -60,7 +60,7 @@ def example_base(code):
                         'max_wallclock_seconds': 10 * 60,
                         'resources': {
                             'num_machines': 1,
-                            'num_mpiprocs_per_machine': 4,
+                            'num_mpiprocs_per_machine': 2,
                                     }
                                 }
                             }            

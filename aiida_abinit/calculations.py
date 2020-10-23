@@ -7,7 +7,7 @@ import io
 from aiida import orm
 from aiida.common import datastructures
 from aiida.engine import CalcJob
-from aiida.orm import (SinglefileData, StructureData)
+from aiida.orm import (SinglefileData, StructureData, RemoteData)
 from aiida.plugins import DataFactory
 
 from abipy.abio.variable import InputVariable
@@ -26,6 +26,8 @@ class AbinitCalculation(CalcJob):
     _DEFAULT_OUTPUT_FILE = 'aiida.out'
     _DEFAULT_PROJECT_NAME = 'aiida'
     _DEFAULT_GSR_FILE_NAME = _DEFAULT_PROJECT_NAME + 'o_GSR.nc'
+    _DEFAULT_TRAJECT_FILE_NAME = _DEFAULT_PROJECT_NAME + 'o_HIST.nc'
+    _DEFAULT_PARENT_CALC_FLDR_NAME = 'parent_calc/'
 
     @classmethod
     def define(cls, spec):
@@ -37,10 +39,12 @@ class AbinitCalculation(CalcJob):
         spec.input('metadata.options.input_filename', valid_type=str, default=cls._DEFAULT_INPUT_FILE)
         spec.input('metadata.options.output_filename', valid_type=str, default=cls._DEFAULT_OUTPUT_FILE)  
         spec.input('metadata.options.output_gsr', valid_type=str, default=cls._DEFAULT_GSR_FILE_NAME)  
+        spec.input('metadata.options.output_hist', valid_type=str, required=False, default=cls._DEFAULT_TRAJECT_FILE_NAME)  
 
         spec.input('parameters', valid_type=orm.Dict, help='the input parameters')
         spec.input('structure', valid_type=StructureData, required=False, help='the main input structure')
         spec.input('settings', valid_type=orm.Dict, required=False, help='special settings')        
+        spec.input('parent_calc_folder', valid_type=RemoteData, required=False, help='remote folder used for restarts')
 
         # Abinit parser 
         spec.inputs['metadata']['options']['parser_name'].default = 'abinit'
@@ -67,6 +71,9 @@ class AbinitCalculation(CalcJob):
 
         # Significant errors but calculation can be used to restart
         spec.exit_code(400, 'ERROR_OUT_OF_WALLTIME', message='The calculation stopped prematurely because it ran out of walltime.')
+        spec.exit_code(500, 'ERROR_GEOMETRY_CONVERGENCE_NOT_REACHED',
+                       message='The ionic minimization cycle did not converge for the given thresholds.')
+
 
         # Outputs
         spec.output('output_parameters', valid_type=orm.Dict, required=True, help='The result of the Abinit calculation.')
@@ -117,7 +124,22 @@ class AbinitCalculation(CalcJob):
         calcinfo.stdin_name = self.options.input_filename
         calcinfo.stdout_name = self.options.output_filename       
         calcinfo.retrieve_list = [self.metadata.options.output_filename]
-        calcinfo.retrieve_list = [self._DEFAULT_OUTPUT_FILE, self._DEFAULT_GSR_FILE_NAME]
+        calcinfo.retrieve_list = [self._DEFAULT_OUTPUT_FILE, self._DEFAULT_GSR_FILE_NAME, self._DEFAULT_TRAJECT_FILE_NAME]
         #calcinfo.retrieve_list += settings.pop('additional_retrieve_list', [])
+
+        # Symlinks.
+        calcinfo.remote_symlink_list = []
+        calcinfo.remote_copy_list = []
+        if 'parent_calc_folder' in self.inputs:
+            comp_uuid = self.inputs.parent_calc_folder.computer.uuid
+            remote_path = self.inputs.parent_calc_folder.get_remote_path()
+            copy_info = (comp_uuid, remote_path, self._DEFAULT_PARENT_CALC_FLDR_NAME)
+
+            # If running on the same computer - make a symlink.
+            if self.inputs.code.computer.uuid == comp_uuid:
+                calcinfo.remote_symlink_list.append(copy_info)
+            # If not - copy the folder.
+            else:
+                calcinfo.remote_copy_list.append(copy_info)
 
         return calcinfo

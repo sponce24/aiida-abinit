@@ -9,9 +9,10 @@ from aiida.orm import Dict
 
 import abipy.abilab as abilab
 from abipy.flowtk import events
+from abipy.dynamics.hist import HistFile
+from pymatgen.core.trajectory import Trajectory
 
 StructureData = DataFactory('structure')
-
 
 class AbinitParser(Parser):
     """
@@ -34,14 +35,14 @@ class AbinitParser(Parser):
         if exit_code is not None:
             return exit_code
 
-        #try:
-        #    returned = self._parse_trajectory()
-        #    if isinstance(returned, StructureData):
-        #        self.out('output_structure', returned)
-        #    else:  # in case this is an error code
-        #        return returned
-        #except exceptions.NotExistent:
-        #    pass
+        try:
+            returned = self._parse_trajectory()
+            if isinstance(returned, StructureData):
+                self.out('output_structure', returned)
+            else:  # in case this is an error code
+                return returned
+        except exceptions.NotExistent:
+            pass
 
         return ExitCode(0)
 
@@ -103,5 +104,24 @@ class AbinitParser(Parser):
         self.out("output_parameters", Dict(dict=result_dict))
 
         return None
+
+    def _parse_trajectory(self):
+        """Abinit trajectory parser."""
+
+        # HIST Abinit NetCDF file - Default name is aiidao_HIST.nc 
+        fname = self.node.get_attribute('output_hist')
+
+        if fname not in self.retrieved.list_object_names():
+            return self.exit_codes.ERROR_OUTPUT_STDOUT_MISSING
+
+        # Absolute path of the folder in which aiidao_GSR.nc is stored
+        path = self.node.get_remote_workdir()
+
+        with HistFile(path+'/'+fname) as h:
+            trajectory = Trajectory.from_structures(h.structures)
+
+        self.out("output_parameters", Dict(dict=result_dict))
+
+        return StructureData(pymatgen=trajectory)
 
 

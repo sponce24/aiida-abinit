@@ -1,18 +1,19 @@
 #!/usr/bin/env python
 """Run a simple silicon DFT calculation on localhost.
 
-Usage: ./example_dft.py
+Usage: python example_dft.py --code abinit-9.2.1-ab@localhost
 """
 import os
 import sys
 import click
-
 import pymatgen as mg
 
 from aiida import cmdline
 from aiida.engine import run
 from aiida.orm import (Code, Dict, SinglefileData, StructureData)
-from aiida.common import NotExistent
+
+# Pseudopotentials.
+# You need to add it when setting up the code [prepend_text]
 
 def example_dft(abinit_code):
     """Run simple silicon DFT calculation."""
@@ -23,10 +24,6 @@ def example_dft(abinit_code):
 
     # Structure.
     structure = StructureData(pymatgen=mg.Structure.from_file(os.path.join(thisdir, "files", 'Si.cif')))
-
-    # Pseudopotentials.
-    # You need to add it when setting up the code [prepend_text]
-    #os.system('export ABI_PSPDIR=/home/sponce/program/abinit-9.2.1/tests/Psps_for_tests')
 
     parameters_dict = {
         'ecut'    : 8.0,     # Maximal kinetic energy cut-off, in Hartree
@@ -48,10 +45,10 @@ def example_dft(abinit_code):
     builder.structure = structure
     builder.parameters = Dict(dict = parameters_dict)
     
-    builder.metadata.options.withmpi = False
+    builder.metadata.options.withmpi = True
     builder.metadata.options.resources = {
         'num_machines': 1,
-        'num_mpiprocs_per_machine': 1,
+        'num_mpiprocs_per_machine': 2,
     
     }
     builder.metadata.options.max_wallclock_seconds = 120 

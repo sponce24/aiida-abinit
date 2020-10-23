@@ -25,7 +25,10 @@
         ],
         "aiida.cmdline.data": [
             "abinit = aiida_abinit.cli:data_cli"
-        ]
+        ],
+	"aiida.workflows": [
+	    "abinit.base = aiida_abinit.workflows.base:AbinitBaseWorkChain"
+	]
     },
     "include_package_data": true,
     "setup_requires": ["reentry"],

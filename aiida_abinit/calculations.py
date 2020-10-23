@@ -65,6 +65,9 @@ class AbinitCalculation(CalcJob):
         spec.exit_code(312, 'ERROR_STRUCTURE_PARSE', message='The output structure could not be parsed.')
         spec.exit_code(350, 'ERROR_UNEXPECTED_PARSER_EXCEPTION', message='The parser raised an unexpected exception.')
 
+        # Significant errors but calculation can be used to restart
+        spec.exit_code(400, 'ERROR_OUT_OF_WALLTIME', message='The calculation stopped prematurely because it ran out of walltime.')
+
         # Outputs
         spec.output('output_parameters', valid_type=orm.Dict, required=True, help='The result of the Abinit calculation.')
         spec.output('output_structure', valid_type=orm.StructureData, required=False,

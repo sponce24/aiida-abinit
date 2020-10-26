@@ -4,13 +4,15 @@ Calculations provided by aiida_abinit.
 Register calculations via the "aiida.calculations" entry point in setup.json.
 """
 import io
+
+from abipy.abio.variable import InputVariable
 from aiida import orm
 from aiida.common import datastructures
 from aiida.engine import CalcJob
-from aiida.orm import (SinglefileData, StructureData, RemoteData)
+from aiida.orm import RemoteData, SinglefileData, StructureData
 from aiida.plugins import DataFactory
-
-from abipy.abio.variable import InputVariable
+from aiida_pseudo.data.pseudo import Psp8Data
+from pymatgen import Element
 from pymatgen.io.abinit.abiobjects import structure_to_abivars
 
 
@@ -27,7 +29,7 @@ class AbinitCalculation(CalcJob):
     _DEFAULT_PROJECT_NAME = 'aiida'
     _DEFAULT_GSR_FILE_NAME = _DEFAULT_PROJECT_NAME + 'o_GSR.nc'
     _DEFAULT_TRAJECT_FILE_NAME = _DEFAULT_PROJECT_NAME + 'o_HIST.nc'
-    _DEFAULT_PARENT_CALC_FLDR_NAME = 'parent_calc/'
+    _DEFAULT_PSEUDO_SUBFOLDER = './'
 
     @classmethod
     def define(cls, spec):
@@ -37,30 +39,26 @@ class AbinitCalculation(CalcJob):
 
         # Inputs
         spec.input('metadata.options.input_filename', valid_type=str, default=cls._DEFAULT_INPUT_FILE)
-        spec.input('metadata.options.output_filename', valid_type=str, default=cls._DEFAULT_OUTPUT_FILE)  
-        spec.input('metadata.options.output_gsr', valid_type=str, default=cls._DEFAULT_GSR_FILE_NAME)  
-        spec.input('metadata.options.output_hist', valid_type=str, required=False, default=cls._DEFAULT_TRAJECT_FILE_NAME)  
+        spec.input('metadata.options.output_filename', valid_type=str, default=cls._DEFAULT_OUTPUT_FILE)
+        spec.input('metadata.options.output_gsr', valid_type=str, default=cls._DEFAULT_GSR_FILE_NAME)
+        spec.input('metadata.options.output_hist', valid_type=str, required=False, default=cls._DEFAULT_TRAJECT_FILE_NAME)
+        spec.input('metadata.options.withmpi', valid_type=bool, default=True)
 
         spec.input('parameters', valid_type=orm.Dict, help='the input parameters')
-        spec.input('structure', valid_type=StructureData, required=False, help='the main input structure')
-        spec.input('settings', valid_type=orm.Dict, required=False, help='special settings')        
+        spec.input('structure', valid_type=StructureData, help='the main input structure')
+        spec.input('settings', valid_type=orm.Dict, required=False, help='special settings')
         spec.input('parent_calc_folder', valid_type=RemoteData, required=False, help='remote folder used for restarts')
+        spec.input_namespace('pseudos', valid_type=(Psp8Data), help='Input pseudo potentials', dynamic=True)
 
-        # Abinit parser 
         spec.inputs['metadata']['options']['parser_name'].default = 'abinit'
-
-        # Use mpi by default.
-        spec.input('metadata.options.withmpi', valid_type=bool, default=True)
         spec.inputs['metadata']['options']['resources'].default = {
                 'num_machines': 1, 'num_mpiprocs_per_machine': 1, }
 
         # Unrecoverable errors: file missing
         spec.exit_code(100, 'ERROR_MISSING_OUTPUT_FILES', message='Calculation did not produce all expected output files.')
-        
         # Unrecoverable errors: resources like the retrieved folder or its expected contents are missing.
         spec.exit_code(200, 'ERROR_NO_RETRIEVED_FOLDER', message='The retrieved folder data node could not be accessed.')
         spec.exit_code(210, 'ERROR_OUTPUT_MISSING', message='The retrieved folder did not contain the required output file.')
-
         # Unrecoverable errors: required retrieved files could not be read, parsed or are otherwise incomplete.
         spec.exit_code(301, 'ERROR_OUTPUT_READ', message='The output file could not be read.')
         spec.exit_code(302, 'ERROR_OUTPUT_PARSE', message='The output file could not be parsed.')
@@ -68,12 +66,10 @@ class AbinitCalculation(CalcJob):
         spec.exit_code(304, 'ERROR_OUTPUT_CONTAINS_ABORT', message='The output file contains the word "ABORT"')
         spec.exit_code(312, 'ERROR_STRUCTURE_PARSE', message='The output structure could not be parsed.')
         spec.exit_code(350, 'ERROR_UNEXPECTED_PARSER_EXCEPTION', message='The parser raised an unexpected exception.')
-
         # Significant errors but calculation can be used to restart
         spec.exit_code(400, 'ERROR_OUT_OF_WALLTIME', message='The calculation stopped prematurely because it ran out of walltime.')
         spec.exit_code(500, 'ERROR_GEOMETRY_CONVERGENCE_NOT_REACHED',
                        message='The ionic minimization cycle did not converge for the given thresholds.')
-
 
         # Outputs
         spec.output('output_parameters', valid_type=orm.Dict, required=True, help='The result of the Abinit calculation.')
@@ -95,48 +91,62 @@ class AbinitCalculation(CalcJob):
             the calculation.
         :return: `aiida.common.datastructures.CalcInfo` instance
         """
+        ### SETUP ###
+        local_copy_list = []
 
-        # Add the used defined input parameters to the input file
-        inp = self.inputs.parameters.get_dict()
+        ### INPUT CHECK ###
+        # if 'parent_calc_folder' in self.inputs:
+        #     parent_calc_folder = self.inputs.parent_calc_folder
+        # else:
+        #     parent_calc_folder = None
 
-        # Add the structure related variables to the dictionary
-        if 'structure' in self.inputs:
-            inp.update(structure_to_abivars(self.inputs.structure.get_pymatgen()))
+        for kind in self.inputs.structure.get_kind_names():
+            if kind not in self.inputs.pseudos:
+                raise ValueError(f'no pseudo available for element {kind}')
+            elif not isinstance(self.inputs.pseudos[kind], Psp8Data):
+                raise ValueError(f'pseudo for element {kind} is not of type Psp8Data')
 
-        lines = []
-        for inp_var, value in inp.items():
-            lines.append(str(InputVariable(inp_var, value))+' \n')
+        ### PSEUDOPOTENTIALS ###
+        folder.get_subfolder(self._DEFAULT_PSEUDO_SUBFOLDER, create=True)
+        for kind in self.inputs.structure.get_kind_names():
+            psp = self.inputs.pseudos[kind]
+            local_copy_list.append((psp.uuid, psp.filename, kind + '.psp8'))
 
-        with io.open(folder.get_abs_path(self._DEFAULT_INPUT_FILE), mode="w", encoding="utf-8") as fobj:
-            fobj.writelines(lines)
+        ### INPUTS ###
+        parameters_dict = self.inputs.parameters.get_dict()
+        structure_parameters = structure_to_abivars(self.inputs.structure.get_pymatgen())
+        pseudo_parameters = {
+            'pseudos': '"' + ', '.join([Element.from_Z(Z).symbol + '.psp8' for Z in structure_parameters['znucl']]) + '"',
+            'pp_dirpath': '"' + self._DEFAULT_PSEUDO_SUBFOLDER + '"'
+        }
+        parameters_dict.update({**structure_parameters, **pseudo_parameters})
 
-        # Create code info
+        with io.open(folder.get_abs_path(self._DEFAULT_INPUT_FILE), mode='w', encoding='utf-8') as f:
+            for key, value in parameters_dict.items():
+                line = str(InputVariable(key, value)) + '\n'
+                f.write(line)
+
+        ### CODE ###
         codeinfo = datastructures.CodeInfo()
         codeinfo.code_uuid = self.inputs.code.uuid
-        # codeinfo.stdin_name = self.options.input_filename
-        # This gives the path to the input file to Abinit rather than passing the input from standard input
-        #codeinfo.cmdline_params = ['<', self.options.input_filename]
         codeinfo.cmdline_params = [self.options.input_filename]
         codeinfo.stdout_name = self.metadata.options.output_filename
         codeinfo.withmpi = self.inputs.metadata.options.withmpi
 
-        # Prepare a `CalcInfo` to be returned to the engine
+        ### CALC INFO ###
         calcinfo = datastructures.CalcInfo()
         calcinfo.codes_info = [codeinfo]
         calcinfo.stdin_name = self.options.input_filename
-        calcinfo.stdout_name = self.options.output_filename       
+        calcinfo.stdout_name = self.options.output_filename
         calcinfo.retrieve_list = [self.metadata.options.output_filename]
         calcinfo.retrieve_list = [self._DEFAULT_OUTPUT_FILE, self._DEFAULT_GSR_FILE_NAME, self._DEFAULT_TRAJECT_FILE_NAME]
-        #calcinfo.retrieve_list += settings.pop('additional_retrieve_list', [])
-
-        # Symlinks.
         calcinfo.remote_symlink_list = []
         calcinfo.remote_copy_list = []
+        calcinfo.local_copy_list = local_copy_list
         if 'parent_calc_folder' in self.inputs:
             comp_uuid = self.inputs.parent_calc_folder.computer.uuid
             remote_path = self.inputs.parent_calc_folder.get_remote_path()
             copy_info = (comp_uuid, remote_path, self._DEFAULT_PARENT_CALC_FLDR_NAME)
-
             # If running on the same computer - make a symlink.
             if self.inputs.code.computer.uuid == comp_uuid:
                 calcinfo.remote_symlink_list.append(copy_info)

@@ -6,6 +6,7 @@ from aiida.engine import (BaseRestartWorkChain, ProcessHandlerReport,
                           ToContext, WorkChain, append_, if_, process_handler,
                           while_)
 from aiida.plugins import CalculationFactory, WorkflowFactory
+from aiida_abinit.utils import validate_and_prepare_pseudos_inputs
 
 AbinitCalculation = CalculationFactory('abinit')
 
@@ -20,7 +21,12 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
         """Define the process specification."""
         # yapf: disable
         super().define(spec)
+
         spec.expose_inputs(AbinitCalculation, namespace='abinit')
+        spec.input('pseudo_family', valid_type=orm.Str, required=False,
+            help='An alternative to specifying the pseudo potentials manually in `pseudos`: one can specify the name '
+                 'of an existing pseudo potential family and the work chain will generate the pseudos automatically '
+                 'based on the input structure.')
 
         spec.outline(
             cls.setup,
@@ -73,8 +79,14 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
         can be defined in `pseudo_family` that will be used together with the input `StructureData` to generate the
         required mapping.
         """
-        pseudos = self.ctx.inputs.parameters.get('pp_dirpath', None)
-        if (pseudos is None):
+        structure = self.ctx.inputs.structure
+        pseudos = self.inputs.abinit.get('pseudos', None)
+        pseudo_family = self.inputs.get('pseudo_family', None)
+
+        try:
+            self.ctx.inputs.pseudos = validate_and_prepare_pseudos_inputs(structure, pseudos, pseudo_family)
+        except ValueError as exception:
+            self.report(f'{exception}')
             return self.exit_codes.ERROR_INVALID_INPUT_PSEUDO_POTENTIALS  # pylint: disable=no-member
 
     def validate_resources(self):
@@ -94,17 +106,6 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
 
             if num_machines is None or max_wallclock_seconds is None:
                 return self.exit_codes.ERROR_INVALID_INPUT_RESOURCES_UNDERSPECIFIED  # pylint: disable=no-member
-
-            #self.set_max_seconds(max_wallclock_seconds)
-
-#   def set_max_seconds(self, max_wallclock_seconds):
-#       """Set the `max_seconds` to a fraction of `max_wallclock_seconds` option to prevent out-of-walltime problems.
-
-#       :param max_wallclock_seconds: the maximum wallclock time that will be set in the scheduler settings.
-#       """
-#       #max_seconds_factor = self.defaults.delta_factor_max_seconds
-#       max_seconds = max_wallclock_seconds * 1.0
-#       #self.ctx.inputs.parameters['CONTROL']['max_seconds'] = max_seconds
 
     def prepare_process(self):
         """Prepare the inputs for the next calculation.

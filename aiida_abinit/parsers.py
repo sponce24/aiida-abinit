@@ -12,7 +12,7 @@ from aiida.orm import Dict, TrajectoryData, StructureData
 from aiida.parsers.parser import Parser
 from aiida.plugins import DataFactory
 from pymatgen import Element
-from qe_tools import CONSTANTS
+from pymatgen import units
 
 
 units_suffix = '_units'
@@ -37,10 +37,10 @@ class AbinitParser(Parser):
          
         Receives in input a dictionary of retrieved nodes. 
         """
-        ionmov = self.node.inputs['parameters'].get_dict().get('ionmov', None)
-        optcell =  self.node.inputs['parameters'].get_dict().get('optcell', None)
+        ionmov = self.node.inputs['parameters'].get_dict().get('ionmov', 0)
+        optcell =  self.node.inputs['parameters'].get_dict().get('optcell', 0)
 
-        if ionmov is None and optcell is None:
+        if ionmov == 0 and optcell == 0:
             is_relaxation = False
         else:
             is_relaxation = True
@@ -162,15 +162,15 @@ class AbinitParser(Parser):
                 'e0_electronpositron' + units_suffix: default_energy_units,
                 'e_monopole': float(gsr.energy_terms.e_monopole),
                 'e_monopole' + units_suffix: default_energy_units,
-                'params': dict(gsr.params),
+                #'params': dict(gsr.params),
                 # 'pawecutdg': float(gsr.pawecutdg),
                 'pressure': float(gsr.pressure),
-                'pressure' + units_suffix: default_stress_units,
+                'pressure' + units_suffix: default_stress_units
                 # 'residm': float(gsr.residm.tolist()),
-                'tsmear': float(gsr.tsmear * CONSTANTS.ry_to_ev * 2.0),
-                'tsmear' + units_suffix: default_energy_units
+                #'tsmear': float(gsr.tsmear * units.Ha_to_eV),
+                #'tsmear' + units_suffix: default_energy_units
             }
-            gsr_data['params']['ecut' + units_suffix] = default_energy_units
+            #gsr_data['params']['ecut' + units_suffix] = default_energy_units
 
         self.out("output_parameters", Dict(dict=gsr_data))
 
@@ -196,9 +196,6 @@ class AbinitParser(Parser):
 
         if fname not in self.retrieved.list_object_names():
             return self.exit_codes.ERROR_MISSING_OUTPUT_FILES
-            # We assume that if the history file does not exist,
-            # we're probably not running a relaxation
-            # TODO: find a way to differentiate between non-relax and relax calculations
 
         with HistFile(path + '/' + fname) as hf:
             structures = hf.structures
@@ -217,12 +214,12 @@ class AbinitParser(Parser):
         symbols = np.array(
             [specie.symbol for specie in structures[0].species], dtype='<U2')
         cells = np.array([structure.lattice.matrix for structure in structures]).reshape((n_steps, 3, 3))
-        energy = energy_ha * CONSTANTS.ry_to_ev * 2.0
-        energy_kin = energy_kin_ha * CONSTANTS.ry_to_ev * 2.0
-        forces = forces_cart_ha_bohr * CONSTANTS.ry_to_ev * 2.0 / CONSTANTS.bohr_to_ang
-        positions = positions_cart_bohr * CONSTANTS.bohr_to_ang
-        stress = np.array([_voigt_to_tensor(sv) for sv in stress_voigt]) * CONSTANTS.ry_to_ev * 2.0 / CONSTANTS.bohr_to_ang**3
-        total_force = np.array([np.sum(f) for f in forces_cart_ha_bohr])  * CONSTANTS.ry_to_ev * 2.0 / CONSTANTS.bohr_to_ang
+        energy = energy_ha * units.Ha_to_eV 
+        energy_kin = energy_kin_ha * units.Ha_to_eV
+        forces = forces_cart_ha_bohr * units.Ha_to_eV / units.bohr_to_ang
+        positions = positions_cart_bohr * units.bohr_to_ang
+        stress = np.array([_voigt_to_tensor(sv) for sv in stress_voigt]) * units.Ha_to_eV / units.bohr_to_ang**3
+        total_force = np.array([np.sum(f) for f in forces_cart_ha_bohr])  * units.Ha_to_eV / units.bohr_to_ang
 
         output_trajectory = TrajectoryData()
         output_trajectory.set_trajectory(

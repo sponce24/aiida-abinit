@@ -12,7 +12,7 @@ from aiida.orm import Dict, TrajectoryData, StructureData
 from aiida.parsers.parser import Parser
 from aiida.plugins import DataFactory
 from pymatgen import Element
-from pymatgen import units
+from pymatgen.core import units
 
 
 units_suffix = '_units'

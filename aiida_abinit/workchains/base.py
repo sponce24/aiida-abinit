@@ -2,10 +2,13 @@
 """Base Abinit Workchain"""
 from aiida import orm
 from aiida.common import AttributeDict, exceptions
-from aiida.engine import WorkChain, ToContext, if_, while_, append_, BaseRestartWorkChain, process_handler
+from aiida.engine import (BaseRestartWorkChain, ProcessHandlerReport,
+                          ToContext, WorkChain, append_, if_, process_handler,
+                          while_)
 from aiida.plugins import CalculationFactory, WorkflowFactory
 
 AbinitCalculation = CalculationFactory('abinit')
+
 
 class AbinitBaseWorkChain(BaseRestartWorkChain):
     """Base Abinit Workchain to perform a DFT calculation. Validates parameters and restart."""
@@ -18,7 +21,7 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
         # yapf: disable
         super().define(spec)
         spec.expose_inputs(AbinitCalculation, namespace='abinit')
-       
+
         spec.outline(
             cls.setup,
             cls.validate_parameters,
@@ -31,8 +34,15 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
             ),
             cls.results,
         )
+
+        spec.expose_outputs(AbinitCalculation)
+
         spec.exit_code(201, 'ERROR_INVALID_INPUT_PSEUDO_POTENTIALS',
-            message='The explicit `pseudos` or `pseudo_family` could not be used to get the necessary pseudos.')        
+            message='The explicit `pseudos` or `pseudo_family` could not be used to get the necessary pseudos.')
+        spec.exit_code(203, 'ERROR_INVALID_INPUT_RESOURCES',
+            message='Neither the `options` nor `automatic_parallelization` input was specified.')
+        spec.exit_code(204, 'ERROR_INVALID_INPUT_RESOURCES_UNDERSPECIFIED',
+            message='The `metadata.options` did not specify both `resources.num_machines` and `max_wallclock_seconds`.')
 
     def setup(self):
         """Call the `setup` of the `BaseRestartWorkChain` and then create the inputs dictionary in `self.ctx.inputs`.
@@ -63,10 +73,9 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
         can be defined in `pseudo_family` that will be used together with the input `StructureData` to generate the
         required mapping.
         """
-        structure = self.ctx.inputs.structure
         pseudos = self.ctx.inputs.parameters.get('pp_dirpath', None)
         if (pseudos is None):
-            return self.exit_codes.ERROR_INVALID_INPUT_PSEUDO_POTENTIALS
+            return self.exit_codes.ERROR_INVALID_INPUT_PSEUDO_POTENTIALS  # pylint: disable=no-member
 
     def validate_resources(self):
         """Validate the inputs related to the resources.
@@ -76,7 +85,7 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
         contain the options `resources` and `max_wallclock_seconds`, where `resources` should define the `num_machines`.
         """
         if 'automatic_parallelization' not in self.inputs and 'options' not in self.ctx.inputs.metadata:
-            return self.exit_codes.ERROR_INVALID_INPUT_RESOURCES
+            return self.exit_codes.ERROR_INVALID_INPUT_RESOURCES  # pylint: disable=no-member
 
         # If automatic parallelization is not enabled, we better make sure that the options satisfy minimum requirements
         if 'automatic_parallelization' not in self.inputs:
@@ -84,18 +93,18 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
             max_wallclock_seconds = self.ctx.inputs.metadata.options.get('max_wallclock_seconds', None)
 
             if num_machines is None or max_wallclock_seconds is None:
-                return self.exit_codes.ERROR_INVALID_INPUT_RESOURCES_UNDERSPECIFIED
+                return self.exit_codes.ERROR_INVALID_INPUT_RESOURCES_UNDERSPECIFIED  # pylint: disable=no-member
 
             #self.set_max_seconds(max_wallclock_seconds)
 
- #   def set_max_seconds(self, max_wallclock_seconds):
- #       """Set the `max_seconds` to a fraction of `max_wallclock_seconds` option to prevent out-of-walltime problems.
+#   def set_max_seconds(self, max_wallclock_seconds):
+#       """Set the `max_seconds` to a fraction of `max_wallclock_seconds` option to prevent out-of-walltime problems.
 
- #       :param max_wallclock_seconds: the maximum wallclock time that will be set in the scheduler settings.
- #       """
- #       #max_seconds_factor = self.defaults.delta_factor_max_seconds
- #       max_seconds = max_wallclock_seconds * 1.0
- #       #self.ctx.inputs.parameters['CONTROL']['max_seconds'] = max_seconds
+#       :param max_wallclock_seconds: the maximum wallclock time that will be set in the scheduler settings.
+#       """
+#       #max_seconds_factor = self.defaults.delta_factor_max_seconds
+#       max_seconds = max_wallclock_seconds * 1.0
+#       #self.ctx.inputs.parameters['CONTROL']['max_seconds'] = max_seconds
 
     def prepare_process(self):
         """Prepare the inputs for the next calculation.
@@ -138,9 +147,3 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
             self.report_error_handled(calculation, 'out of walltime: structure changed so restarting from scratch')
 
         return ProcessHandlerReport(True)
-
-
-
-
-
-

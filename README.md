@@ -178,4 +178,5 @@ The AiiDA-abinit plugin is developed and maintained by
 
 * [Samuel Poncé](https://www.samuelponce.com/) - samuel.pon@gmail.com
 * [Guido Petretto](https://uclouvain.be/fr/repertoires/guido.petretto)
+* [Austin Zadoks](https://people.epfl.ch/austin.zadoks/?lang=en) - austin.zadoks@epfl.ch
 

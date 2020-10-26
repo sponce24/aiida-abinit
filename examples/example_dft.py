@@ -36,9 +36,8 @@ def example_dft(code, pseudo_family):
         'shiftk'  : '0 0 0',
         'nstep'   : 20,      # Maximal number of SCF cycles
         'toldfe'  : 1.0e-6,  # Will stop when, twice in a row, the difference 
-                                # between two consecutive evaluations of total energy 
-                                # differ by less than toldfe (in Hartree)
-        'diemac'  : 12.0,    # Precondition for SCF cycle using a model dielectric
+                             # between two consecutive evaluations of total energy 
+                             # differ by less than toldfe (in Hartree)
             }),
         'metadata': {
             'options': {

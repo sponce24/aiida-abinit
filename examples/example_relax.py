@@ -42,7 +42,6 @@ def example_relax(code, pseudo_family):
             'toldfe'  : 1.0e-6,  # Will stop when, twice in a row, the difference 
                                     # between two consecutive evaluations of total energy 
                                     # differ by less than toldfe (in Hartree)
-            'diemac'  : 12.0,    # Precondition for SCF cycle using a model dielectric
             }),
             'metadata': {
                 'options': {

@@ -3,15 +3,16 @@ from aiida.orm import Group, StructureData, Str
 from aiida_pseudo.data.pseudo import Psp8Data
 from aiida.common.exceptions import NotExistent
 
-def validate_and_prepare_pseudos_inputs(structure: StructureData, pseudos: Optional[Dict[str, Psp8Data]]=None, pseudo_family=Str) -> Dict[str, Psp8Data]:  # pylint: disable=invalid-name
+def validate_and_prepare_pseudos_inputs(structure: StructureData, 
+        pseudos: Optional[Dict[str, Psp8Data]]=None, pseudo_family=Str) -> Dict[str, Psp8Data]:  # pylint: disable=invalid-name
     """Validate the given pseudos mapping or pseudo potential family with respect to the given structure.
 
     Use the explicitly passed pseudos dictionary or use the pseudo_family in combination with the structure to obtain
     that dictionary.
 
-    The pseudos dictionary should now be a dictionary of UPF nodes with the kind as linkname
-    As such, if there are multiple kinds with the same element, there will be duplicate UPF nodes
-    but multiple links for the same input node are not allowed. Moreover, to couple the UPF nodes
+    The pseudos dictionary should now be a dictionary of Psp8Data nodes with the kind as linkname
+    As such, if there are multiple kinds with the same element, there will be duplicate Psp8Data nodes
+    but multiple links for the same input node are not allowed. Moreover, to couple the Psp8Data nodes
     to the Calculation instance, we have to go through the use_pseudo method, which takes the kind
     name as an additional parameter. When creating a Calculation through a Process instance, one
     cannot call the use methods directly but rather should pass them as keyword arguments. However,

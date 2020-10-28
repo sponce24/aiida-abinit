@@ -28,6 +28,7 @@ def example_dft(code, pseudo_family):
     kpoints = KpointsData()
     kpoints.set_cell_from_structure(structure)
     kpoints.set_kpoints_mesh([2, 2, 2])
+    # kpoints.set_kpoints_mesh_from_density(2.0)
 
     parameters_dict = {
         'code': code,

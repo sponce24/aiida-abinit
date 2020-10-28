@@ -5,15 +5,19 @@ Register calculations via the "aiida.calculations" entry point in setup.json.
 """
 import io
 
+import numpy as np
+from pymatgen import Element
+from pymatgen.io.abinit.abiobjects import structure_to_abivars
 from abipy.abio.variable import InputVariable
+
 from aiida import orm
 from aiida.common import datastructures
 from aiida.engine import CalcJob
-from aiida.orm import RemoteData, SinglefileData, StructureData
+from aiida.orm import RemoteData, SinglefileData
 from aiida.plugins import DataFactory
 from aiida_pseudo.data.pseudo import Psp8Data
-from pymatgen import Element
-from pymatgen.io.abinit.abiobjects import structure_to_abivars
+
+from aiida_abinit.utils import array_to_input_string
 
 
 class AbinitCalculation(CalcJob):
@@ -29,7 +33,7 @@ class AbinitCalculation(CalcJob):
     _DEFAULT_PROJECT_NAME = 'aiida'
     _DEFAULT_GSR_FILE_NAME = _DEFAULT_PROJECT_NAME + 'o_GSR.nc'
     _DEFAULT_TRAJECT_FILE_NAME = _DEFAULT_PROJECT_NAME + 'o_HIST.nc'
-    _DEFAULT_PSEUDO_SUBFOLDER = './'
+    _DEFAULT_PSEUDO_SUBFOLDER = './pseudo/'
 
     @classmethod
     def define(cls, spec):
@@ -44,8 +48,9 @@ class AbinitCalculation(CalcJob):
         spec.input('metadata.options.output_hist', valid_type=str, required=False, default=cls._DEFAULT_TRAJECT_FILE_NAME)
         spec.input('metadata.options.withmpi', valid_type=bool, default=True)
 
+        spec.input('structure', valid_type=orm.StructureData, help='the main input structure')
+        spec.input('kpoints', valid_type=orm.KpointsData, help='kpoint mesh or kpoint path')
         spec.input('parameters', valid_type=orm.Dict, help='the input parameters')
-        spec.input('structure', valid_type=StructureData, help='the main input structure')
         spec.input('settings', valid_type=orm.Dict, required=False, help='special settings')
         spec.input('parent_calc_folder', valid_type=RemoteData, required=False, help='remote folder used for restarts')
         spec.input_namespace('pseudos', valid_type=(Psp8Data), help='Input pseudo potentials', dynamic=True)
@@ -95,31 +100,47 @@ class AbinitCalculation(CalcJob):
         local_copy_list = []
 
         ### INPUT CHECK ###
-        # if 'parent_calc_folder' in self.inputs:
-        #     parent_calc_folder = self.inputs.parent_calc_folder
-        # else:
-        #     parent_calc_folder = None
-
+        # PSEUDOS
         for kind in self.inputs.structure.get_kind_names():
             if kind not in self.inputs.pseudos:
                 raise ValueError(f'no pseudo available for element {kind}')
             elif not isinstance(self.inputs.pseudos[kind], Psp8Data):
                 raise ValueError(f'pseudo for element {kind} is not of type Psp8Data')
 
-        ### PSEUDOPOTENTIALS ###
+        # KPOINTS
+        if 'ngkpt' in self.inputs.parameters.keys():
+            raise ValueError('`ngkpt` should not be specified in input parameters')
+        if 'kptopt' in self.inputs.parameters.keys():
+            raise ValueError('`kptopt` should not be specified in input parameters')
+
+        ### PREPARATION ###
+        # PSEUDOS
         folder.get_subfolder(self._DEFAULT_PSEUDO_SUBFOLDER, create=True)
         for kind in self.inputs.structure.get_kind_names():
             psp = self.inputs.pseudos[kind]
-            local_copy_list.append((psp.uuid, psp.filename, kind + '.psp8'))
+            local_copy_list.append((psp.uuid, psp.filename, self._DEFAULT_PSEUDO_SUBFOLDER + kind + '.psp8'))
+
+        #KPOINTS
+        kpoints_mesh = self.inputs.kpoints.get_kpoints_mesh()[0]
 
         ### INPUTS ###
         parameters_dict = self.inputs.parameters.get_dict()
+
         structure_parameters = structure_to_abivars(self.inputs.structure.get_pymatgen())
         pseudo_parameters = {
             'pseudos': '"' + ', '.join([Element.from_Z(Z).symbol + '.psp8' for Z in structure_parameters['znucl']]) + '"',
             'pp_dirpath': '"' + self._DEFAULT_PSEUDO_SUBFOLDER + '"'
         }
-        parameters_dict.update({**structure_parameters, **pseudo_parameters})
+        kpoints_parameters = {
+            'kptopt': 1,
+            'ngkpt': kpoints_mesh # ' '.join([f'{k}' for k in kpoints_mesh])
+        }
+
+        parameters_dict.update({**kpoints_parameters, **pseudo_parameters, **structure_parameters})
+
+        for key, value in parameters_dict.items():
+            if isinstance(value, (list, tuple, np.ndarray)):
+                parameters_dict[key] = array_to_input_string(value)
 
         with io.open(folder.get_abs_path(self._DEFAULT_INPUT_FILE), mode='w', encoding='utf-8') as f:
             for key, value in parameters_dict.items():

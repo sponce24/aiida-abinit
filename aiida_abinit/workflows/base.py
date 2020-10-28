@@ -6,7 +6,7 @@ from aiida.engine import (BaseRestartWorkChain, ProcessHandlerReport,
                           ToContext, WorkChain, append_, if_, process_handler,
                           while_)
 from aiida.plugins import CalculationFactory, WorkflowFactory
-from aiida_abinit.utils import validate_and_prepare_pseudos_inputs
+from aiida_abinit.utils import validate_and_prepare_pseudos_inputs, create_kpoints_from_distance
 
 AbinitCalculation = CalculationFactory('abinit')
 
@@ -22,15 +22,17 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
         # yapf: disable
         super().define(spec)
 
-        spec.expose_inputs(AbinitCalculation, namespace='abinit')
-        spec.input('pseudo_family', valid_type=orm.Str, required=False,
-            help='An alternative to specifying the pseudo potentials manually in `pseudos`: one can specify the name '
-                 'of an existing pseudo potential family and the work chain will generate the pseudos automatically '
-                 'based on the input structure.')
+        spec.input('kpoints', valid_type=orm.KpointsData, required=False,
+            help='An explicit k-points mesh (list not currently supported). Either this or `kpoints_distance` has to be provided.')
+        spec.input('kpoints_distance', valid_type=orm.Float, required=False,
+            help='The minimum desired distance in 1/Å between k-points in reciprocal space. The explicit k-points will '
+                 'be generated automatically by a calculation function based on the input structure.')
+        spec.expose_inputs(AbinitCalculation, namespace='abinit', exclude=('kpoints',))
 
         spec.outline(
             cls.setup,
             cls.validate_parameters,
+            cls.validate_kpoints,
             cls.validate_pseudos,
             cls.validate_resources,
             while_(cls.should_run_process)(
@@ -44,7 +46,9 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
         spec.expose_outputs(AbinitCalculation)
 
         spec.exit_code(201, 'ERROR_INVALID_INPUT_PSEUDO_POTENTIALS',
-            message='The explicit `pseudos` or `pseudo_family` could not be used to get the necessary pseudos.')
+            message='`pseudos` could not be used to get the necessary pseudos.')
+        spec.exit_code(202, 'ERROR_INVALID_INPUT_KPOINTS',
+            message='Neither the `kpoints` nor the `kpoints_distance` input was specified.')
         spec.exit_code(203, 'ERROR_INVALID_INPUT_RESOURCES',
             message='Neither the `options` nor `automatic_parallelization` input was specified.')
         spec.exit_code(204, 'ERROR_INVALID_INPUT_RESOURCES_UNDERSPECIFIED',
@@ -66,25 +70,43 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
         Also define dictionary `inputs` in the context, that will contain the inputs for the calculation that will be
         launched in the `run_calculation` step.
         """
+        super().setup()
         self.ctx.inputs.parameters = self.ctx.inputs.parameters.get_dict()
         self.ctx.inputs.settings = self.ctx.inputs.settings.get_dict() if 'settings' in self.ctx.inputs else {}
-
         self.ctx.inputs.parameters.setdefault('ecut', 8.0)
 
+    def validate_kpoints(self):
+        """Validate the inputs related to k-points.
+
+        Either an explicit `KpointsData` with given mesh/path, or a desired k-points distance should be specified. In
+        the case of the latter, the `KpointsData` will be constructed for the input `StructureData` using the
+        `create_kpoints_from_distance` calculation function.
+        """
+        if all([key not in self.inputs for key in ['kpoints', 'kpoints_distance']]):
+            return self.exit_codes.ERROR_INVALID_INPUT_KPOINTS # pylint: disable=no-member
+
+        try:
+            kpoints = self.inputs.kpoints
+        except AttributeError:
+            inputs = {
+                'structure': self.inputs.abinit.structure,
+                'distance': self.inputs.kpoints_distance,
+                'metadata': {'call_link_label': 'create_kpoints_from_distance'}
+            }
+            kpoints = create_kpoints_from_distance(**inputs)  # pylint: disable=unexpected-keyword-arg
+
+        self.ctx.inputs.kpoints = kpoints
 
     def validate_pseudos(self):
         """Validate the inputs related to pseudopotentials.
 
-        Either the pseudo potentials should be defined explicitly in the `pseudos` namespace, or alternatively, a family
-        can be defined in `pseudo_family` that will be used together with the input `StructureData` to generate the
-        required mapping.
+        The pseudo potentials should be defined explicitly in the `pseudos` namespace
         """
         structure = self.ctx.inputs.structure
         pseudos = self.inputs.abinit.get('pseudos', None)
-        pseudo_family = self.inputs.get('pseudo_family', None)
 
         try:
-            self.ctx.inputs.pseudos = validate_and_prepare_pseudos_inputs(structure, pseudos, pseudo_family)
+            self.ctx.inputs.pseudos = validate_and_prepare_pseudos_inputs(structure, pseudos)
         except ValueError as exception:
             self.report(f'{exception}')
             return self.exit_codes.ERROR_INVALID_INPUT_PSEUDO_POTENTIALS  # pylint: disable=no-member
@@ -92,20 +114,14 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
     def validate_resources(self):
         """Validate the inputs related to the resources.
 
-        One can omit the normally required `options.resources` input for the `PwCalculation`, as long as the input
-        `automatic_parallelization` is specified. If this is not the case, the `metadata.options` should at least
-        contain the options `resources` and `max_wallclock_seconds`, where `resources` should define the `num_machines`.
+        `metadata.options` should at least contain the options `resources` and `max_wallclock_seconds`,
+        where `resources` should define the `num_machines`.
         """
-        if 'automatic_parallelization' not in self.inputs and 'options' not in self.ctx.inputs.metadata:
-            return self.exit_codes.ERROR_INVALID_INPUT_RESOURCES  # pylint: disable=no-member
+        num_machines = self.ctx.inputs.metadata.options.get('resources', {}).get('num_machines', None)
+        max_wallclock_seconds = self.ctx.inputs.metadata.options.get('max_wallclock_seconds', None)
 
-        # If automatic parallelization is not enabled, we better make sure that the options satisfy minimum requirements
-        if 'automatic_parallelization' not in self.inputs:
-            num_machines = self.ctx.inputs.metadata.options.get('resources', {}).get('num_machines', None)
-            max_wallclock_seconds = self.ctx.inputs.metadata.options.get('max_wallclock_seconds', None)
-
-            if num_machines is None or max_wallclock_seconds is None:
-                return self.exit_codes.ERROR_INVALID_INPUT_RESOURCES_UNDERSPECIFIED  # pylint: disable=no-member
+        if num_machines is None or max_wallclock_seconds is None:
+            return self.exit_codes.ERROR_INVALID_INPUT_RESOURCES_UNDERSPECIFIED  # pylint: disable=no-member
 
     def prepare_process(self):
         """Prepare the inputs for the next calculation.
@@ -131,7 +147,6 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
         arguments = [calculation.process_label, calculation.pk, calculation.exit_status, calculation.exit_message]
         self.report('{}<{}> failed with exit status {}: {}'.format(*arguments))
         self.report('Action taken: {}'.format(action))
-
 
     @process_handler(priority=580, exit_codes=[
         AbinitCalculation.exit_codes.ERROR_OUT_OF_WALLTIME,

@@ -1,14 +1,36 @@
-from typing import Optional, Any, List, Dict
-from aiida.orm import Group, StructureData, Str
-from aiida_pseudo.data.pseudo import Psp8Data
+import typing as typ
+
+import numpy as np
+
+from aiida import orm
 from aiida.common.exceptions import NotExistent
+from aiida.engine import calcfunction
+from aiida_pseudo.data.pseudo import Psp8Data
 
-def validate_and_prepare_pseudos_inputs(structure: StructureData, 
-        pseudos: Optional[Dict[str, Psp8Data]]=None, pseudo_family=Str) -> Dict[str, Psp8Data]:  # pylint: disable=invalid-name
-    """Validate the given pseudos mapping or pseudo potential family with respect to the given structure.
+def array_to_input_string(array: typ.Union[list, tuple, np.ndarray]) -> str:
+    """Convert an input array to a string formatted for Abinit"""
 
-    Use the explicitly passed pseudos dictionary or use the pseudo_family in combination with the structure to obtain
-    that dictionary.
+    nested = False
+    input_string = ''
+    for value in array:
+        if isinstance(value, (list, tuple, np.ndarray)):
+            nested = True
+            input_string += array_to_input_string(value) 
+        else:
+            if isinstance(value, float):
+                input_string += f'    {value:0.10f}'
+            else:
+                input_string += f'    {value}'
+
+    if not nested:
+        input_string = '\n' + input_string
+
+    return input_string
+
+
+def validate_and_prepare_pseudos_inputs(structure: orm.StructureData, 
+        pseudos: typ.Optional[typ.Dict[str, Psp8Data]]=None) -> typ.Dict[str, Psp8Data]:  # pylint: disable=invalid-name
+    """Validate the given pseudos mapping with respect to the given structure.
 
     The pseudos dictionary should now be a dictionary of Psp8Data nodes with the kind as linkname
     As such, if there are multiple kinds with the same element, there will be duplicate Psp8Data nodes
@@ -19,24 +41,12 @@ def validate_and_prepare_pseudos_inputs(structure: StructureData,
     we can pass the additional parameters by using them as the keys of a dictionary
 
     :param structure: StructureData node
-    :param pseudos: a dictionary where keys are the kind names and value are UpfData nodes
-    :param pseudo_family: pseudopotential family name to use, should be Str node
-    :raises: ValueError if neither pseudos or pseudo_family is specified or if no UpfData is found for
-        every element in the structure
-    :returns: a dictionary of UpfData nodes where the key is the kind name
+    :param pseudos: a dictionary where keys are the kind names and value are Psp8 nodes
+    :raises: ValueError if no Psp8 is found for every element in the structure
+    :returns: a dictionary of Psp8 nodes where the key is the kind name
     """
 
-    if pseudos and pseudo_family:
-        raise ValueError('you cannot specify both "pseudos" and "pseudo_family"')
-    elif pseudos is None and pseudo_family is None:
-        raise ValueError('neither an explicit pseudos dictionary nor a pseudo_family was specified')
-    elif pseudo_family:
-        try:
-            family = Group.objects.get(label=pseudo_family.value)
-        except NotExistent:
-            raise NotExistent(f'No Psp8Family {pseudo_family.value} found')
-        pseudos = family.get_pseudos(structure=structure)
-    elif isinstance(pseudos, (str, Str)):
+    if isinstance(pseudos, (str, orm.Str)):
         raise TypeError('you passed "pseudos" as a string - maybe you wanted to pass it as "pseudo_family" instead?')
 
     for kind in structure.get_kind_names():
@@ -46,3 +56,33 @@ def validate_and_prepare_pseudos_inputs(structure: StructureData,
             raise ValueError(f'pseudo for element {kind} is not of type Psp8Data')
 
     return pseudos
+
+
+@calcfunction
+def create_kpoints_from_distance(structure: orm.StructureData, distance: orm.Float) -> orm.KpointsData:
+    """Generate a uniformly spaced kpoint mesh for a given structure.
+
+    The spacing between kpoints in reciprocal space is guaranteed to be at least the defined distance.
+
+    :param structure: the StructureData to which the mesh should apply
+    :param distance: a Float with the desired distance between kpoints in reciprocal space
+    :returns: a KpointsData with the generated mesh
+    """
+    epsilon = 1E-5
+
+    kpoints = orm.KpointsData()
+    kpoints.set_cell_from_structure(structure)
+    kpoints.set_kpoints_mesh_from_density(distance.value)
+
+    lengths_vector = [np.linalg.norm(vector) for vector in structure.cell]
+    lengths_kpoint = kpoints.get_kpoints_mesh()[0]
+
+    is_symmetric_cell = all(abs(length - lengths_vector[0]) < epsilon for length in lengths_vector)
+    is_symmetric_mesh = all(length == lengths_kpoint[0] for length in lengths_kpoint)
+
+    # If the vectors of the cell all have the same length, the kpoint mesh should be isotropic as well
+    if is_symmetric_cell and not is_symmetric_mesh:
+        nkpoints = max(lengths_kpoint)
+        kpoints.set_kpoints_mesh([nkpoints, nkpoints, nkpoints])
+
+    return kpoints

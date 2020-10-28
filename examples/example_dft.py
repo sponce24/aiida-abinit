@@ -11,7 +11,7 @@ import click
 import pymatgen as mg
 from aiida import cmdline
 from aiida.engine import run
-from aiida.orm import Dict, Group, StructureData
+from aiida.orm import Dict, Group, StructureData, KpointsData
 from aiida_abinit.calculations import AbinitCalculation
 
 
@@ -23,22 +23,31 @@ def example_dft(code, pseudo_family):
     thisdir = os.path.dirname(os.path.realpath(__file__))
     structure = StructureData(pymatgen=mg.Structure.from_file(os.path.join(thisdir, "files", 'Si.cif')))
     pseudo_family = Group.objects.get(label=pseudo_family)
+    pseudos = pseudo_family.get_pseudos(structure=structure)
+
+    kpoints = KpointsData()
+    kpoints.set_cell_from_structure(structure)
+    kpoints.set_kpoints_mesh([2, 2, 2])
 
     parameters_dict = {
         'code': code,
         'structure': structure,
-        'pseudos': pseudo_family.get_pseudos(structure=structure),
+        'pseudos': pseudos,
+        'kpoints': kpoints,
         'parameters': Dict(dict={
         'ecut'    : 8.0,     # Maximal kinetic energy cut-off, in Hartree
-        'kptopt'  : 1,       # Option for the automatic generation of k points
-        'ngkpt'   : '2 2 2', # This is a 2x2x2 grid based on the primitive vectors
-        'nshiftk' : 1,       # of the reciprocal space (that form a BCC lattice !)
-        'shiftk'  : '0 0 0',
+        'nshiftk' : 4,       # of the reciprocal space (that form a BCC lattice !)
+        'shiftk': [
+            [0.5, 0.5, 0.5],
+            [0.5, 0.0, 0.0],
+            [0.0, 0.5, 0.0],
+            [0.0, 0.0, 0.5]
+        ],
         'nstep'   : 20,      # Maximal number of SCF cycles
         'toldfe'  : 1.0e-6,  # Will stop when, twice in a row, the difference 
                              # between two consecutive evaluations of total energy 
                              # differ by less than toldfe (in Hartree)
-            }),
+        }),
         'metadata': {
             'options': {
                 'withmpi': True,

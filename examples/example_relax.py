@@ -11,7 +11,7 @@ import click
 import pymatgen as mg
 from aiida import cmdline
 from aiida.engine import run
-from aiida.orm import Dict, Group, Str, StructureData
+from aiida.orm import Dict, Group, Str, Float, StructureData
 from aiida_abinit.workflows.base import AbinitBaseWorkChain
 
 
@@ -22,22 +22,28 @@ def example_relax(code, pseudo_family):
 
     thisdir = os.path.dirname(os.path.realpath(__file__))
     structure = StructureData(pymatgen=mg.Structure.from_file(os.path.join(thisdir, "files", 'Si.cif')))
+    pseudo_family = Group.objects.get(label=pseudo_family)
+    pseudos = pseudo_family.get_pseudos(structure=structure)
 
     base_parameters_dict = {
-        'pseudo_family': Str(pseudo_family),
+        'kpoints_distance': Float(0.6),  # 1 / Angstrom
         'abinit' : {
             'code': code,
             'structure': structure,
+            'pseudos': pseudos,
             'parameters': Dict(dict={
             'optcell' : 2,       # Cell optimization
             'ionmov'  : 22,      # Atoms relaxation
             'tolmxf'  : 5.0e-5,  # Tolerence on the maximal force
             'ecutsm'  : 0.5,     # Energy cutoff smearing, in Hartree
             'ecut'    : 20.0,    # Maximal kinetic energy cut-off, in Hartree
-            'kptopt'  : 1,       # Option for the automatic generation of k points
-            'ngkpt'   : '4 4 4', # This is a 2x2x2 grid based on the primitive vectors
             'nshiftk' : 4,       # of the reciprocal space (that form a BCC lattice !)
-            'shiftk'  : '0.5 0.5 0.5 \n 0.5 0.0 0.0 \n 0.0 0.5 0.0 \n 0.0 0.0 0.5',
+            'shiftk'  : [
+                [0.5, 0.5, 0.5],
+                [0.5, 0.0, 0.0],
+                [0.0, 0.5, 0.0],
+                [0.0, 0.0, 0.5]
+            ],
             'nstep'   : 20,      # Maximal number of SCF cycles
             'toldfe'  : 1.0e-6,  # Will stop when, twice in a row, the difference 
                                     # between two consecutive evaluations of total energy 

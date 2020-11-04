@@ -5,19 +5,20 @@ Register calculations via the "aiida.calculations" entry point in setup.json.
 """
 import io
 
-import numpy as np
+# import numpy as np
 from pymatgen import Element
 from pymatgen.io.abinit.abiobjects import structure_to_abivars
-from abipy.abio.variable import InputVariable
+# from abipy.abio.variable import InputVariable
+from abipy.abio.inputs import AbinitInput
+from abipy.data.hgh_pseudos import HGH_TABLE
 
 from aiida import orm
 from aiida.common import datastructures
 from aiida.engine import CalcJob
-from aiida.orm import RemoteData, SinglefileData
-from aiida.plugins import DataFactory
+from aiida.orm import RemoteData
 from aiida_pseudo.data.pseudo import Psp8Data
 
-from aiida_abinit.utils import array_to_input_string
+# from aiida_abinit.utils import array_to_input_string
 
 
 class AbinitCalculation(CalcJob):
@@ -120,32 +121,34 @@ class AbinitCalculation(CalcJob):
             psp = self.inputs.pseudos[kind]
             local_copy_list.append((psp.uuid, psp.filename, self._DEFAULT_PSEUDO_SUBFOLDER + kind + '.psp8'))
 
-        #KPOINTS
+        # KPOINTS
         kpoints_mesh = self.inputs.kpoints.get_kpoints_mesh()[0]
 
         ### INPUTS ###
-        parameters_dict = self.inputs.parameters.get_dict()
+        input_parameters = self.inputs.parameters.get_dict()
+        shiftk = input_parameters.pop('shiftk', [0.0, 0.0, 0.0])
 
-        structure_parameters = structure_to_abivars(self.inputs.structure.get_pymatgen())
+        # TODO: There must be a better way to do this
+        znucl = structure_to_abivars(self.inputs.structure.get_pymatgen())['znucl']
         pseudo_parameters = {
-            'pseudos': '"' + ', '.join([Element.from_Z(Z).symbol + '.psp8' for Z in structure_parameters['znucl']]) + '"',
+            'pseudos': '"' + ', '.join([Element.from_Z(Z).symbol + '.psp8' for Z in znucl]) + '"',
             'pp_dirpath': '"' + self._DEFAULT_PSEUDO_SUBFOLDER + '"'
         }
-        kpoints_parameters = {
-            'kptopt': 1,
-            'ngkpt': kpoints_mesh # ' '.join([f'{k}' for k in kpoints_mesh])
-        }
 
-        parameters_dict.update({**kpoints_parameters, **pseudo_parameters, **structure_parameters})
+        input_parameters = {**input_parameters, **pseudo_parameters}
 
-        for key, value in parameters_dict.items():
-            if isinstance(value, (list, tuple, np.ndarray)):
-                parameters_dict[key] = array_to_input_string(value)
+        abin = AbinitInput(
+            structure=self.inputs.structure.get_pymatgen(),
+            pseudos=HGH_TABLE,
+            abi_kwargs=input_parameters
+        )
+        abin.set_kmesh(
+            ngkpt=kpoints_mesh,
+            shiftk=shiftk
+        )
 
         with io.open(folder.get_abs_path(self._DEFAULT_INPUT_FILE), mode='w', encoding='utf-8') as f:
-            for key, value in parameters_dict.items():
-                line = str(InputVariable(key, value)) + '\n'
-                f.write(line)
+            f.write(abin.to_string(with_pseudos=False))
 
         ### CODE ###
         codeinfo = datastructures.CodeInfo()

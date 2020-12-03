@@ -18,7 +18,7 @@ from aiida.engine import CalcJob
 from aiida.orm import RemoteData
 from aiida_pseudo.data.pseudo import Psp8Data
 
-# from aiida_abinit.utils import array_to_input_string
+# from .utils import aiida_psp8_to_abipy_pseudo
 
 
 class AbinitCalculation(CalcJob):
@@ -129,6 +129,7 @@ class AbinitCalculation(CalcJob):
         shiftk = input_parameters.pop('shiftk', [0.0, 0.0, 0.0])
 
         # TODO: There must be a better way to do this
+        # maybe we can convert the PseudoPotential objects into pymatgen Pseudo objects?
         znucl = structure_to_abivars(self.inputs.structure.get_pymatgen())['znucl']
         pseudo_parameters = {
             'pseudos': '"' + ', '.join([Element.from_Z(Z).symbol + '.psp8' for Z in znucl]) + '"',

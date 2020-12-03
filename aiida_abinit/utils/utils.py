@@ -1,11 +1,13 @@
+import tempfile
 import typing as typ
 
 import numpy as np
+from pymatgen.io.abinit.pseudos import Pseudo
 
 from aiida import orm
-from aiida.common.exceptions import NotExistent
 from aiida.engine import calcfunction
 from aiida_pseudo.data.pseudo import Psp8Data
+
 
 def array_to_input_string(array: typ.Union[list, tuple, np.ndarray]) -> str:
     """Convert an input array to a string formatted for Abinit"""
@@ -15,7 +17,7 @@ def array_to_input_string(array: typ.Union[list, tuple, np.ndarray]) -> str:
     for value in array:
         if isinstance(value, (list, tuple, np.ndarray)):
             nested = True
-            input_string += array_to_input_string(value) 
+            input_string += array_to_input_string(value)
         else:
             if isinstance(value, float):
                 input_string += f'    {value:0.10f}'
@@ -28,8 +30,21 @@ def array_to_input_string(array: typ.Union[list, tuple, np.ndarray]) -> str:
     return input_string
 
 
-def validate_and_prepare_pseudos_inputs(structure: orm.StructureData, 
-        pseudos: typ.Optional[typ.Dict[str, Psp8Data]]=None) -> typ.Dict[str, Psp8Data]:  # pylint: disable=invalid-name
+def aiida_psp8_to_abipy_pseudo(aiida_pseudo: Psp8Data,
+                               pseudo_dir: str = '') -> Pseudo:
+    """Convert an aiida-pseudo Psp8Data into a pymatgen/abipy Pseudo"""
+    with tempfile.NamedTemporaryFile('w', encoding='utf-8') as f:
+        f.write(aiida_pseudo.get_content())
+        abinit_pseudo = Pseudo.from_file(f.name)
+        f.close()
+    abinit_pseudo.path = pseudo_dir + aiida_pseudo.attributes['filename']
+    return abinit_pseudo
+
+
+def validate_and_prepare_pseudos_inputs(
+    structure: orm.StructureData,
+    pseudos: typ.Optional[typ.Dict[str, Psp8Data]] = None
+) -> typ.Dict[str, Psp8Data]:  # pylint: disable=invalid-name
     """Validate the given pseudos mapping with respect to the given structure.
 
     The pseudos dictionary should now be a dictionary of Psp8Data nodes with the kind as linkname
@@ -47,19 +62,23 @@ def validate_and_prepare_pseudos_inputs(structure: orm.StructureData,
     """
 
     if isinstance(pseudos, (str, orm.Str)):
-        raise TypeError('you passed "pseudos" as a string - maybe you wanted to pass it as "pseudo_family" instead?')
+        raise TypeError(
+            'you passed "pseudos" as a string - maybe you wanted to pass it as "pseudo_family" instead?'
+        )
 
     for kind in structure.get_kind_names():
         if kind not in pseudos:
             raise ValueError(f'no pseudo available for element {kind}')
         elif not isinstance(pseudos[kind], Psp8Data):
-            raise ValueError(f'pseudo for element {kind} is not of type Psp8Data')
+            raise ValueError(
+                f'pseudo for element {kind} is not of type Psp8Data')
 
     return pseudos
 
 
 @calcfunction
-def create_kpoints_from_distance(structure: orm.StructureData, distance: orm.Float) -> orm.KpointsData:
+def create_kpoints_from_distance(structure: orm.StructureData,
+                                 distance: orm.Float) -> orm.KpointsData:
     """Generate a uniformly spaced kpoint mesh for a given structure.
 
     The spacing between kpoints in reciprocal space is guaranteed to be at least the defined distance.
@@ -77,8 +96,10 @@ def create_kpoints_from_distance(structure: orm.StructureData, distance: orm.Flo
     lengths_vector = [np.linalg.norm(vector) for vector in structure.cell]
     lengths_kpoint = kpoints.get_kpoints_mesh()[0]
 
-    is_symmetric_cell = all(abs(length - lengths_vector[0]) < epsilon for length in lengths_vector)
-    is_symmetric_mesh = all(length == lengths_kpoint[0] for length in lengths_kpoint)
+    is_symmetric_cell = all(
+        abs(length - lengths_vector[0]) < epsilon for length in lengths_vector)
+    is_symmetric_mesh = all(length == lengths_kpoint[0]
+                            for length in lengths_kpoint)
 
     # If the vectors of the cell all have the same length, the kpoint mesh should be isotropic as well
     if is_symmetric_cell and not is_symmetric_mesh:

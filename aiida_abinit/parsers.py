@@ -14,7 +14,6 @@ from aiida.plugins import DataFactory
 from pymatgen import Element
 from pymatgen.core import units
 
-
 units_suffix = '_units'
 default_charge_units = 'e'
 default_dipole_units = 'Debye'
@@ -38,7 +37,7 @@ class AbinitParser(Parser):
         Receives in input a dictionary of retrieved nodes. 
         """
         ionmov = self.node.inputs['parameters'].get_dict().get('ionmov', 0)
-        optcell =  self.node.inputs['parameters'].get_dict().get('optcell', 0)
+        optcell = self.node.inputs['parameters'].get_dict().get('optcell', 0)
 
         if ionmov == 0 and optcell == 0:
             is_relaxation = False
@@ -102,75 +101,136 @@ class AbinitParser(Parser):
 
         with abilab.abiopen(path + '/' + fname) as gsr:
             gsr_data = {
-                'abinit_version': gsr.abinit_version,
-                # 'ecut': gsr.ecut,
-                # 'ecut' + units_suffix: default_energy_units,
-                'cart_stress_tensor': gsr.cart_stress_tensor.tolist(),
-                'cart_stress_tensor' + units_suffix: default_stress_units,
-                'is_scf_run': bool(gsr.is_scf_run),
+                'abinit_version':
+                gsr.abinit_version,
+                'cart_stress_tensor':
+                gsr.cart_stress_tensor.tolist(),
+                'cart_stress_tensor' + units_suffix:
+                default_stress_units,
+                'is_scf_run':
+                bool(gsr.is_scf_run),
                 # 'cart_forces': gsr.cart_forces.tolist(),
                 # 'cart_forces' + units_suffix: default_force_units,
-                'forces': gsr.cart_forces.tolist(),  # backwards compatibility
-                'forces' + units_suffix: default_force_units,
-                'energy': float(gsr.energy),
-                'energy' + units_suffix: default_energy_units,
-                'e_localpsp': float(gsr.energy_terms.e_localpsp),
-                'e_localpsp' + units_suffix: default_energy_units,
-                'e_eigenvalues': float(gsr.energy_terms.e_eigenvalues),
-                'e_eigenvalues' + units_suffix: default_energy_units,
-                'e_ewald': float(gsr.energy_terms.e_ewald),
-                'e_ewald' + units_suffix: default_energy_units,
-                'e_hartree': float(gsr.energy_terms.e_hartree),
-                'e_hartree' + units_suffix: default_energy_units,
-                'e_corepsp': float(gsr.energy_terms.e_corepsp),
-                'e_corepsp' + units_suffix: default_energy_units,
-                'e_corepspdc': float(gsr.energy_terms.e_corepspdc),
-                'e_corepspdc'+ units_suffix: default_energy_units,
-                'e_kinetic': float(gsr.energy_terms.e_kinetic),
-                'e_kinetic' + units_suffix: default_energy_units,
-                'e_nonlocalpsp': float(gsr.energy_terms.e_nonlocalpsp),
-                'e_nonlocalpsp' + units_suffix: default_energy_units,
-                'e_entropy': float(gsr.energy_terms.e_entropy),
-                'e_entropy' + units_suffix: default_energy_units,
-                'entropy': float(gsr.energy_terms.entropy),
-                'entropy' + units_suffix: default_energy_units,
-                'e_xc': float(gsr.energy_terms.e_xc),
-                'e_xc' + units_suffix: default_energy_units,
-                'e_xcdc': float(gsr.energy_terms.e_xcdc),
-                'e_xcdc' + units_suffix: default_energy_units,
-                'e_paw': float(gsr.energy_terms.e_paw),
-                'e_paw' + units_suffix: default_energy_units,
-                'e_pawdc': float(gsr.energy_terms.e_pawdc),
-                'e_pawdc' + units_suffix: default_energy_units,
-                'e_elecfield': float(gsr.energy_terms.e_elecfield),
-                'e_elecfield' + units_suffix: default_energy_units,
-                'e_magfield': float(gsr.energy_terms.e_magfield),
-                'e_magfield' + units_suffix: default_energy_units,
-                'e_fermie': float(gsr.energy_terms.e_fermie),
-                'e_fermie' + units_suffix: default_energy_units,
-                'e_sicdc': float(gsr.energy_terms.e_sicdc),
-                'e_sicdc' + units_suffix: default_energy_units,
-                'e_exactX': float(gsr.energy_terms.e_exactX),
-                'e_exactX' + units_suffix: default_energy_units,
-                'h0': float(gsr.energy_terms.h0),
-                'h0' + units_suffix: default_energy_units,
-                'e_electronpositron': float(gsr.energy_terms.e_electronpositron),
-                'e_electronpositron' + units_suffix: default_energy_units,
-                'edc_electronpositron': float(gsr.energy_terms.edc_electronpositron),
-                'edc_electronpositron' + units_suffix: default_energy_units,
-                'e0_electronpositron': float(gsr.energy_terms.e0_electronpositron),
-                'e0_electronpositron' + units_suffix: default_energy_units,
-                'e_monopole': float(gsr.energy_terms.e_monopole),
-                'e_monopole' + units_suffix: default_energy_units,
-                #'params': dict(gsr.params),
-                # 'pawecutdg': float(gsr.pawecutdg),
-                'pressure': float(gsr.pressure),
-                'pressure' + units_suffix: default_stress_units
-                # 'residm': float(gsr.residm.tolist()),
-                #'tsmear': float(gsr.tsmear * units.Ha_to_eV),
-                #'tsmear' + units_suffix: default_energy_units
+                'forces':
+                gsr.cart_forces.tolist(),  # backwards compatibility
+                'forces' + units_suffix:
+                default_force_units,
+                'energy':
+                float(gsr.energy),
+                'energy' + units_suffix:
+                default_energy_units,
+                'e_localpsp':
+                float(gsr.energy_terms.e_localpsp),
+                'e_localpsp' + units_suffix:
+                default_energy_units,
+                'e_eigenvalues':
+                float(gsr.energy_terms.e_eigenvalues),
+                'e_eigenvalues' + units_suffix:
+                default_energy_units,
+                'e_ewald':
+                float(gsr.energy_terms.e_ewald),
+                'e_ewald' + units_suffix:
+                default_energy_units,
+                'e_hartree':
+                float(gsr.energy_terms.e_hartree),
+                'e_hartree' + units_suffix:
+                default_energy_units,
+                'e_corepsp':
+                float(gsr.energy_terms.e_corepsp),
+                'e_corepsp' + units_suffix:
+                default_energy_units,
+                'e_corepspdc':
+                float(gsr.energy_terms.e_corepspdc),
+                'e_corepspdc' + units_suffix:
+                default_energy_units,
+                'e_kinetic':
+                float(gsr.energy_terms.e_kinetic),
+                'e_kinetic' + units_suffix:
+                default_energy_units,
+                'e_nonlocalpsp':
+                float(gsr.energy_terms.e_nonlocalpsp),
+                'e_nonlocalpsp' + units_suffix:
+                default_energy_units,
+                'e_entropy':
+                float(gsr.energy_terms.e_entropy),
+                'e_entropy' + units_suffix:
+                default_energy_units,
+                'entropy':
+                float(gsr.energy_terms.entropy),
+                'entropy' + units_suffix:
+                default_energy_units,
+                'e_xc':
+                float(gsr.energy_terms.e_xc),
+                'e_xc' + units_suffix:
+                default_energy_units,
+                'e_xcdc':
+                float(gsr.energy_terms.e_xcdc),
+                'e_xcdc' + units_suffix:
+                default_energy_units,
+                'e_paw':
+                float(gsr.energy_terms.e_paw),
+                'e_paw' + units_suffix:
+                default_energy_units,
+                'e_pawdc':
+                float(gsr.energy_terms.e_pawdc),
+                'e_pawdc' + units_suffix:
+                default_energy_units,
+                'e_elecfield':
+                float(gsr.energy_terms.e_elecfield),
+                'e_elecfield' + units_suffix:
+                default_energy_units,
+                'e_magfield':
+                float(gsr.energy_terms.e_magfield),
+                'e_magfield' + units_suffix:
+                default_energy_units,
+                'e_fermie':
+                float(gsr.energy_terms.e_fermie),
+                'e_fermie' + units_suffix:
+                default_energy_units,
+                'e_sicdc':
+                float(gsr.energy_terms.e_sicdc),
+                'e_sicdc' + units_suffix:
+                default_energy_units,
+                'e_exactX':
+                float(gsr.energy_terms.e_exactX),
+                'e_exactX' + units_suffix:
+                default_energy_units,
+                'h0':
+                float(gsr.energy_terms.h0),
+                'h0' + units_suffix:
+                default_energy_units,
+                'e_electronpositron':
+                float(gsr.energy_terms.e_electronpositron),
+                'e_electronpositron' + units_suffix:
+                default_energy_units,
+                'edc_electronpositron':
+                float(gsr.energy_terms.edc_electronpositron),
+                'edc_electronpositron' + units_suffix:
+                default_energy_units,
+                'e0_electronpositron':
+                float(gsr.energy_terms.e0_electronpositron),
+                'e0_electronpositron' + units_suffix:
+                default_energy_units,
+                'e_monopole':
+                float(gsr.energy_terms.e_monopole),
+                'e_monopole' + units_suffix:
+                default_energy_units,
+                'pressure':
+                float(gsr.pressure),
+                'pressure' + units_suffix:
+                default_stress_units
             }
-            #gsr_data['params']['ecut' + units_suffix] = default_energy_units
+            try:
+                total_magnetization = gsr.ebands.get_collinear_mag()
+                gsr_data['total_magnetization'] = total_magnetization
+                gsr_data['total_magnetization' + units_suffix] = default_magnetization_units
+            except ValueError as valerr:
+                # get_collinear_mag will raise Value error if the calculation is not magnetic
+                if 'Cannot calculate collinear magnetization' in valerr.args[0]:
+                    pass
+                else:
+                    raise valerr
+
 
         self.out("output_parameters", Dict(dict=gsr_data))
 
@@ -211,23 +271,25 @@ class AbinitParser(Parser):
             stress_voigt = ds.variables['strten'][:, :].data  # Ha/bohr^3
 
         stepids = np.arange(n_steps)
-        symbols = np.array(
-            [specie.symbol for specie in structures[0].species], dtype='<U2')
-        cells = np.array([structure.lattice.matrix for structure in structures]).reshape((n_steps, 3, 3))
-        energy = energy_ha * units.Ha_to_eV 
+        symbols = np.array([specie.symbol for specie in structures[0].species],
+                           dtype='<U2')
+        cells = np.array(
+            [structure.lattice.matrix for structure in structures]).reshape(
+                (n_steps, 3, 3))
+        energy = energy_ha * units.Ha_to_eV
         energy_kin = energy_kin_ha * units.Ha_to_eV
         forces = forces_cart_ha_bohr * units.Ha_to_eV / units.bohr_to_ang
         positions = positions_cart_bohr * units.bohr_to_ang
-        stress = np.array([_voigt_to_tensor(sv) for sv in stress_voigt]) * units.Ha_to_eV / units.bohr_to_ang**3
-        total_force = np.array([np.sum(f) for f in forces_cart_ha_bohr])  * units.Ha_to_eV / units.bohr_to_ang
+        stress = np.array([_voigt_to_tensor(sv) for sv in stress_voigt
+                           ]) * units.Ha_to_eV / units.bohr_to_ang**3
+        total_force = np.array([np.sum(f) for f in forces_cart_ha_bohr
+                                ]) * units.Ha_to_eV / units.bohr_to_ang
 
         output_trajectory = TrajectoryData()
-        output_trajectory.set_trajectory(
-            stepids=stepids,
-            cells=cells,
-            symbols=symbols,
-            positions=positions
-        )
+        output_trajectory.set_trajectory(stepids=stepids,
+                                         cells=cells,
+                                         symbols=symbols,
+                                         positions=positions)
         output_trajectory.set_array("energy", energy)  # eV
         output_trajectory.set_array("energy_kin", energy_kin)  # eV
         output_trajectory.set_array("forces", forces)  # eV/angstrom

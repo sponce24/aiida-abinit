@@ -221,11 +221,12 @@ class AbinitParser(Parser):
                 default_stress_units
             }
             try:
-                total_magnetization = gsr.ebands.get_collinear_mag()
+                # will return an integer 0 if non-magnetic calculation is run; convert it to a float
+                total_magnetization = float(gsr.ebands.get_collinear_mag())
                 gsr_data['total_magnetization'] = total_magnetization
                 gsr_data['total_magnetization' + units_suffix] = default_magnetization_units
             except ValueError as valerr:
-                # get_collinear_mag will raise Value error if the calculation is not magnetic
+                # get_collinear_mag will raise ValueError if it doesn't know what to do
                 if 'Cannot calculate collinear magnetization' in valerr.args[0]:
                     pass
                 else:

@@ -16,7 +16,7 @@ from aiida import orm
 from aiida.common import datastructures
 from aiida.engine import CalcJob
 from aiida.orm import RemoteData
-from aiida_pseudo.data.pseudo import Psp8Data
+from aiida_pseudo.data.pseudo import Psp8Data, JthXmlData
 
 # from .utils import aiida_psp8_to_abipy_pseudo
 
@@ -54,7 +54,7 @@ class AbinitCalculation(CalcJob):
         spec.input('parameters', valid_type=orm.Dict, help='the input parameters')
         spec.input('settings', valid_type=orm.Dict, required=False, help='special settings')
         spec.input('parent_calc_folder', valid_type=RemoteData, required=False, help='remote folder used for restarts')
-        spec.input_namespace('pseudos', valid_type=(Psp8Data), help='Input pseudo potentials', dynamic=True)
+        spec.input_namespace('pseudos', valid_type=(Psp8Data, JthXmlData), help='Input pseudo potentials', dynamic=True)
 
         spec.inputs['metadata']['options']['parser_name'].default = 'abinit'
         spec.inputs['metadata']['options']['resources'].default = {

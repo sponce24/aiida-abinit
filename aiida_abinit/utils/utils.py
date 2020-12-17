@@ -43,7 +43,7 @@ def aiida_psp8_to_abipy_pseudo(aiida_pseudo: Psp8Data,
 
 def validate_and_prepare_pseudos_inputs(
     structure: orm.StructureData,
-    pseudos: typ.Optional[typ.Dict[str, typ.Union[Psp8Data, JthXmlData]] = None
+    pseudos: typ.Optional[typ.Dict[str, typ.Union[Psp8Data, JthXmlData]]] = None
 ) -> typ.Dict[str, Psp8Data]:  # pylint: disable=invalid-name
     """Validate the given pseudos mapping with respect to the given structure.
 

@@ -6,7 +6,7 @@ from pymatgen.io.abinit.pseudos import Pseudo
 
 from aiida import orm
 from aiida.engine import calcfunction
-from aiida_pseudo.data.pseudo import Psp8Data
+from aiida_pseudo.data.pseudo import Psp8Data, JthXmlData
 
 
 def array_to_input_string(array: typ.Union[list, tuple, np.ndarray]) -> str:
@@ -43,7 +43,7 @@ def aiida_psp8_to_abipy_pseudo(aiida_pseudo: Psp8Data,
 
 def validate_and_prepare_pseudos_inputs(
     structure: orm.StructureData,
-    pseudos: typ.Optional[typ.Dict[str, Psp8Data]] = None
+    pseudos: typ.Optional[typ.Dict[str, typ.Union[Psp8Data, JthXmlData]] = None
 ) -> typ.Dict[str, Psp8Data]:  # pylint: disable=invalid-name
     """Validate the given pseudos mapping with respect to the given structure.
 
@@ -69,9 +69,9 @@ def validate_and_prepare_pseudos_inputs(
     for kind in structure.get_kind_names():
         if kind not in pseudos:
             raise ValueError(f'no pseudo available for element {kind}')
-        elif not isinstance(pseudos[kind], Psp8Data):
+        elif not isinstance(pseudos[kind], (Psp8Data, JthXmlData)):
             raise ValueError(
-                f'pseudo for element {kind} is not of type Psp8Data')
+                f'pseudo for element {kind} is not of type Psp8Data or JthXmlData')
 
     return pseudos
 

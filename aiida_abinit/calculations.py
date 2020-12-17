@@ -105,8 +105,8 @@ class AbinitCalculation(CalcJob):
         for kind in self.inputs.structure.get_kind_names():
             if kind not in self.inputs.pseudos:
                 raise ValueError(f'no pseudo available for element {kind}')
-            elif not isinstance(self.inputs.pseudos[kind], Psp8Data):
-                raise ValueError(f'pseudo for element {kind} is not of type Psp8Data')
+            elif not isinstance(self.inputs.pseudos[kind], (Psp8Data, JthXmlData)):
+                raise ValueError(f'pseudo for element {kind} is not of type Psp8Data or JthXmlData')
 
         # KPOINTS
         if 'ngkpt' in self.inputs.parameters.keys():

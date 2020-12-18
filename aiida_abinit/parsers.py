@@ -10,8 +10,6 @@ from aiida.common import exceptions
 from aiida.engine import ExitCode
 from aiida.orm import Dict, TrajectoryData, StructureData
 from aiida.parsers.parser import Parser
-from aiida.plugins import DataFactory
-from pymatgen import Element
 from pymatgen.core import units
 
 units_suffix = '_units'
@@ -232,7 +230,6 @@ class AbinitParser(Parser):
                 else:
                     raise valerr
 
-
         self.out("output_parameters", Dict(dict=gsr_data))
 
     def _parse_trajectory(self):
@@ -281,10 +278,8 @@ class AbinitParser(Parser):
         energy_kin = energy_kin_ha * units.Ha_to_eV
         forces = forces_cart_ha_bohr * units.Ha_to_eV / units.bohr_to_ang
         positions = positions_cart_bohr * units.bohr_to_ang
-        stress = np.array([_voigt_to_tensor(sv) for sv in stress_voigt
-                           ]) * units.Ha_to_eV / units.bohr_to_ang**3
-        total_force = np.array([np.sum(f) for f in forces_cart_ha_bohr
-                                ]) * units.Ha_to_eV / units.bohr_to_ang
+        stress = np.array([_voigt_to_tensor(sv) for sv in stress_voigt]) * units.Ha_to_eV / units.bohr_to_ang**3
+        total_force = np.array([np.sum(f) for f in forces_cart_ha_bohr]) * units.Ha_to_eV / units.bohr_to_ang
 
         output_trajectory = TrajectoryData()
         output_trajectory.set_trajectory(stepids=stepids,

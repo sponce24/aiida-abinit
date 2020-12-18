@@ -81,6 +81,9 @@ class AbinitCalculation(CalcJob):
         spec.input('metadata.options.parser_name', valid_type=str, default='abinit')
         spec.input('metadata.options.input_filename', valid_type=str, default=cls._DEFAULT_INPUT_FILE)
         spec.input('metadata.options.output_filename', valid_type=str, default=cls._DEFAULT_OUTPUT_FILE)
+        spec.input('metadata.options.output_gsr', valid_type=str, default=cls._DEFAULT_GSR_FILE)
+        spec.input('metadata.options.output_hist', valid_type=str, default=cls._DEFAULT_HIST_FILE)
+        spec.input('metadata.options.output_out', valid_type=str, default=cls._DEFAULT_OUT_FILE)
         spec.input('metadata.options.withmpi', valid_type=bool, default=True)
         spec.input('structure', valid_type=orm.StructureData,
             help='The input structure.')
@@ -144,7 +147,7 @@ class AbinitCalculation(CalcJob):
         # Check that no blocked keywords have ben provided in the input parameters
         provided_blocked_keywords = []
         for keyword in self._blocked_keywords:
-            if keyword in self.input_parameters.get_dict():
+            if keyword in self.inputs.parameters.get_dict():
                 provided_blocked_keywords.append(keyword)
         if provided_blocked_keywords:
             msg = f'Input keyword(s) {provided_blocked_keywords} were provided in `input_parameters`, but they must ' \
@@ -233,13 +236,13 @@ class AbinitCalculation(CalcJob):
         local_copy_pseudo_list = []
         kind_pseudo_file_mapping = {}
         for kind in kinds:
-            pseudo = pseudos[kind]
+            pseudo = pseudos[kind.name]
             pseudo_file_name = kind + self._PSEUDO_EXTENSION[type(pseudo)]
             local_copy_pseudo_list.append(
                 (pseudo.uuid, pseudo.filename, self._PSEUDO_SUBFOLDER + pseudo_file_name)
             )
-            kind_pseudo_file_mapping[kind] = pseudo_file_name
-        pseudo_files = [kind_pseudo_file_mapping[kind] for kind in types_of_kind]
+            kind_pseudo_file_mapping[kind.name] = pseudo_file_name
+        pseudo_files = [kind_pseudo_file_mapping[kind.name] for kind in types_of_kind]
 
         # Create the abinit input parameters for the pseudos
         pseudos_string = ', '.join(pseudo_files)

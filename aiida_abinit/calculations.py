@@ -112,7 +112,8 @@ class AbinitCalculation(CalcJob):
         if 'ngkpt' in self.inputs.parameters.keys():
             raise ValueError('`ngkpt` should not be specified in input parameters')
         if 'kptopt' in self.inputs.parameters.keys():
-            raise ValueError('`kptopt` should not be specified in input parameters')
+            if self.inputs.parameters['kptopt'] not in [1, 2, 3, 4]:
+                raise ValueError('Supported values for `kptopt` are 1, 2, 3, and 4')
 
         ### PREPARATION ###
         # PSEUDOS
@@ -145,7 +146,8 @@ class AbinitCalculation(CalcJob):
         )
         abin.set_kmesh(
             ngkpt=kpoints_mesh,
-            shiftk=shiftk
+            shiftk=shiftk,
+            kptopt=input_parameters.pop('kptopt', 1)
         )
 
         with io.open(folder.get_abs_path(self._DEFAULT_INPUT_FILE), mode='w', encoding='utf-8') as f:

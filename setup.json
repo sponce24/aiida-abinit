@@ -12,7 +12,7 @@
         "Natural Language :: English",
         "Framework :: AiiDA"
     ],
-    "version": "0.2.0a0",
+    "version": "0.2.0a1",
     "entry_points": {
         "aiida.data": [
             "abinit = aiida_abinit.data:DiffParameters"
@@ -35,7 +35,7 @@
     "reentry_register": true,
     "install_requires": [
         "aiida-core>=1.1.0,<2.0.0",
-	"aiida-pseudo>=0.5.0",
+        "aiida-pseudo>=0.5.0",
         "six",
         "voluptuous"
     ],

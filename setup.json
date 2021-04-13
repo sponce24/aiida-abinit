@@ -14,17 +14,11 @@
     ],
     "version": "0.2.0a1",
     "entry_points": {
-        "aiida.data": [
-            "abinit = aiida_abinit.data:DiffParameters"
-        ],
         "aiida.calculations": [
             "abinit = aiida_abinit.calculations:AbinitCalculation"
         ],
         "aiida.parsers": [
             "abinit = aiida_abinit.parsers:AbinitParser"
-        ],
-        "aiida.cmdline.data": [
-            "abinit = aiida_abinit.cli:data_cli"
         ],
 	    "aiida.workflows": [
 	        "abinit.base = aiida_abinit.workflows.base:AbinitBaseWorkChain"
@@ -35,9 +29,7 @@
     "reentry_register": true,
     "install_requires": [
         "aiida-core>=1.1.0,<2.0.0",
-        "aiida-pseudo>=0.5.0",
-        "six",
-        "voluptuous"
+        "aiida-pseudo>=0.5.0"
     ],
     "extras_require": {
         "testing": [

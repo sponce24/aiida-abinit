@@ -2,7 +2,7 @@
 """CalcJob class for Abinit."""
 import io
 
-from pymatgen import Element
+from pymatgen.core import Element
 from pymatgen.io.abinit.abiobjects import structure_to_abivars
 from abipy.abio.inputs import AbinitInput
 from abipy.data.hgh_pseudos import HGH_TABLE

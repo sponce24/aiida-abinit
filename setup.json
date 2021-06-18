@@ -34,7 +34,7 @@
         "importlib_resources"
     ],
     "extras_require": {
-        "testing": [
+        "tests": [
             "pgtest~=1.3",
             "pytest~=6.0",
             "pytest-regressions~=1.0"

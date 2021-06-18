@@ -7,7 +7,7 @@
   "authors": ["M. J. van Setten", "M. Giantomassi"],
   "comment" : "This hint table was taken from Pseudo Dojo at http://www.pseudo-dojo.org"
   "dojo_dir": "ONCVPSP-PBE-PDv0.4"
- }, 
+ },
  "pseudos_metadata": {
   "H": {
    "basename": "H.psp8",
@@ -1595,4 +1595,3 @@
   }
  }
 }
-

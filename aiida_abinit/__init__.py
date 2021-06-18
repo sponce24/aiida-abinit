@@ -1,7 +1,4 @@
-"""
-aiida_abinit
+# -*- coding: utf-8 -*-
+"""The AiiDA plugin for ABINIT."""
 
-The AiiDA plugin for ABINIT.
-"""
-
-__version__ = "0.2.0a1"
+__version__ = '0.2.0a1'

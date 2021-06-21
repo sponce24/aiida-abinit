@@ -22,7 +22,7 @@ def example_dft(code, pseudo_family):
     print('Testing Abinit Total energy on Silicon using AbinitCalculation')
 
     thisdir = os.path.dirname(os.path.realpath(__file__))
-    structure = StructureData(pymatgen=mg.Structure.from_file(os.path.join(thisdir, 'files', 'Si.cif')))
+    structure = StructureData(pymatgen=mg.core.Structure.from_file(os.path.join(thisdir, 'files', 'Si.cif')))
     pseudo_family = Group.objects.get(label=pseudo_family)
     pseudos = pseudo_family.get_pseudos(structure=structure)
 

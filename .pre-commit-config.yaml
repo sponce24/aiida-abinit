@@ -30,7 +30,8 @@ repos:
             (?x)^(
                 aiida_abinit/parsers/.*|
                 docs/.*|
-                tests/.*(?<!\.py)$
+                tests/.*(?<!\.py)|
+                examples/.*(?<!\.py)$
             )$
         args: ['--ignore=D104,D202,D203,D213']
 

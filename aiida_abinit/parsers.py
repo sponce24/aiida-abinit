@@ -175,7 +175,7 @@ class AbinitParser(Parser):
             try:
                 bands_data = BandsData()
                 bands_data.set_kpoints(gsr.ebands.kpoints.get_cart_coords())
-                bands_data.set_bands(np.array(gsr.ebands.eigens))
+                bands_data.set_bands(np.array(gsr.ebands.eigens), units=str(gsr.ebands.eigens.unit))
                 self.out('output_bands', bands_data)
             except:  # pylint: disable=bare-except
                 pass

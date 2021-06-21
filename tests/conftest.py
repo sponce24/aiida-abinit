@@ -301,7 +301,7 @@ def generate_psp8_data():
                    '2     2     2     0     0    nproj\n' \
                    '1     1           extension_switch'
         stream = io.BytesIO(content.encode('utf-8'))
-        return Psp8Data(stream, filename=f'{element}.upf')
+        return Psp8Data(stream, filename=f'{element}.psp8')
 
     return _generate_psp8_data
 

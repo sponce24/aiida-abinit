@@ -9,7 +9,7 @@ from abipy.flowtk import events
 
 from aiida.common import exceptions
 from aiida.engine import ExitCode
-from aiida.orm import Dict, StructureData, TrajectoryData
+from aiida.orm import BandsData, Dict, StructureData, TrajectoryData
 from aiida.parsers.parser import Parser
 
 UNITS_SUFFIX = '_units'
@@ -42,6 +42,10 @@ class AbinitParser(Parser):
         except exceptions.NotExistent:
             return self.exit_codes.ERROR_NO_RETRIEVED_TEMPORARY_FOLDER
 
+        exit_code = self._parse_stdout()
+        if exit_code is not None:
+            return exit_code
+
         exit_code = self._parse_gsr()
         if exit_code is not None:
             return exit_code
@@ -53,11 +57,10 @@ class AbinitParser(Parser):
 
         return ExitCode(0)
 
-    def _parse_gsr(self):
-        """Abinit GSR parser."""
-        ## STDOUT ##
+    def _parse_stdout(self):
+        """Abinit stdout parser."""
         # Output file - aiida.out
-        fname = self.node.get_attribute('output_filename')
+        fname = f'{self.node.get_attribute("prefix")}.out'
         # Absolute path of the folder in which files are stored
         path = self.node.get_remote_workdir()
 
@@ -83,9 +86,10 @@ class AbinitParser(Parser):
         if not report.run_completed:
             return self.exit_codes.ERROR_OUTPUT_CONTAINS_ABORT
 
-        ## GSR ##
+    def _parse_gsr(self):
+        """Abinit GSR parser."""
         # Output GSR Abinit NetCDF file - Default name is aiidao_GSR.nc
-        fname = self.node.get_attribute('output_gsr')
+        fname = f'{self.node.get_attribute("prefix")}o_GSR.nc'
         # Absolute path of the folder in which aiidao_GSR.nc is stored
         path = self.node.get_remote_workdir()
 
@@ -155,6 +159,7 @@ class AbinitParser(Parser):
                 'pressure': float(gsr.pressure),
                 'pressure' + UNITS_SUFFIX: DEFAULT_STRESS_UNITS
             }
+
             try:
                 # will return an integer 0 if non-magnetic calculation is run; convert it to a float
                 total_magnetization = float(gsr.ebands.get_collinear_mag())
@@ -166,6 +171,14 @@ class AbinitParser(Parser):
                     pass
                 else:
                     raise valerr
+
+            try:
+                bands_data = BandsData()
+                bands_data.set_kpoints(gsr.ebands.kpoints.get_cart_coords())
+                bands_data.set_bands(np.array(gsr.ebands.eigens), units=str(gsr.ebands.eigens.unit))
+                self.out('output_bands', bands_data)
+            except:  # pylint: disable=bare-except
+                pass
 
         self.out('output_parameters', Dict(dict=gsr_data))
 
@@ -188,7 +201,7 @@ class AbinitParser(Parser):
         # Absolute path of the folder in which aiidao_GSR.nc is stored
         path = self.node.get_remote_workdir()
         # HIST Abinit NetCDF file - Default name is aiidao_HIST.nc
-        fname = self.node.get_attribute('output_hist')
+        fname = f'{self.node.get_attribute("prefix")}o_HIST.nc'
 
         if fname not in self.retrieved.list_object_names():
             return self.exit_codes.ERROR_MISSING_OUTPUT_FILES

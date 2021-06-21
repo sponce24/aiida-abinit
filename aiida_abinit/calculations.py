@@ -23,7 +23,7 @@ class AbinitCalculation(CalcJob):
     _DEFAULT_OUTPUT_FILE = 'aiida.out'
     _DEFAULT_PROJECT_NAME = 'aiida'
     _DEFAULT_GSR_FILE_NAME = _DEFAULT_PROJECT_NAME + 'o_GSR.nc'
-    _DEFAULT_TRAJECT_FILE_NAME = _DEFAULT_PROJECT_NAME + 'o_HIST.nc'
+    _DEFAULT_HIST_FILE_NAME = _DEFAULT_PROJECT_NAME + 'o_HIST.nc'
     _DEFAULT_PSEUDO_SUBFOLDER = './pseudo/'
 
     @classmethod
@@ -39,37 +39,37 @@ class AbinitCalculation(CalcJob):
         spec.input('metadata.options.output_filename',
                    valid_type=str,
                    default=cls._DEFAULT_OUTPUT_FILE)
-        spec.input('metadata.options.output_gsr',
+        spec.input('metadata.options.output_gsr_filename',
                    valid_type=str,
                    default=cls._DEFAULT_GSR_FILE_NAME)
-        spec.input('metadata.options.output_hist',
+        spec.input('metadata.options.output_hist_filename',
                    valid_type=str,
                    required=False,
-                   default=cls._DEFAULT_TRAJECT_FILE_NAME)
+                   default=cls._DEFAULT_HIST_FILE_NAME)
         spec.input('metadata.options.withmpi',
                    valid_type=bool,
                    default=True)
 
         spec.input('structure',
                    valid_type=orm.StructureData,
-                   help='the main input structure')
+                   help='The main input structure.')
         spec.input('kpoints',
                    valid_type=orm.KpointsData,
-                   help='kpoint mesh or kpoint path')
+                   help='The k-point mesh or path')
         spec.input('parameters',
                    valid_type=orm.Dict,
-                   help='the input parameters')
+                   help='The ABINIT input parameters.')
         spec.input('settings',
                    valid_type=orm.Dict,
                    required=False,
-                   help='special settings')
+                   help='Various special settings.')
         spec.input('parent_calc_folder',
                    valid_type=RemoteData,
                    required=False,
-                   help='remote folder used for restarts')
+                   help='A remote folder used for restarts.')
         spec.input_namespace('pseudos',
                              valid_type=(Psp8Data, JthXmlData),
-                             help='Input pseudo potentials',
+                             help='The pseudopotentials.',
                              dynamic=True)
 
         spec.inputs['metadata']['options']['parser_name'].default = 'abinit'
@@ -107,20 +107,16 @@ class AbinitCalculation(CalcJob):
         spec.output('output_parameters',
                     valid_type=orm.Dict,
                     required=True,
-                    help='The result of the Abinit calculation.')
+                    help='Various output quantities.')
         spec.output('output_structure',
                     valid_type=orm.StructureData,
                     required=False,
-                    help='Optional relaxed crystal structure')
+                    help='Final structure of the calculation if present.')
         spec.output('output_trajectory',
-                    valid_type=orm.ArrayData,
+                    valid_type=orm.TrajectoryData,
                     required=False,
-                    help='Optional trajectory')
+                    help='Trajectory of various output quantities over the calculation if present.')
         spec.default_output_node = 'output_parameters'
-
-        # SP: Not sure if I should set this ?
-        spec.inputs.dynamic = True
-        spec.outputs.dynamic = True
 
     def prepare_for_submission(self, folder):
         """Create input files.
@@ -200,10 +196,9 @@ class AbinitCalculation(CalcJob):
         calcinfo.codes_info = [codeinfo]
         calcinfo.stdin_name = self.options.input_filename
         calcinfo.stdout_name = self.options.output_filename
-        calcinfo.retrieve_list = [self.metadata.options.output_filename]
-        calcinfo.retrieve_list = [self._DEFAULT_OUTPUT_FILE,
-                                  self._DEFAULT_GSR_FILE_NAME,
-                                  self._DEFAULT_TRAJECT_FILE_NAME]
+        calcinfo.retrieve_list = [self.metadata.options.output_filename,
+                                  self.metadata.options.output_gsr_filename,
+                                  self.metadata.options.output_hist_filename]
         calcinfo.remote_symlink_list = []
         calcinfo.remote_copy_list = []
         calcinfo.local_copy_list = local_copy_list

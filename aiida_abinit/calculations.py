@@ -2,14 +2,14 @@
 """CalcJob class for Abinit."""
 import io
 
-from pymatgen.core import Element
+# from pymatgen.core import Element
 from pymatgen.io.abinit.abiobjects import structure_to_abivars
 from abipy.abio.inputs import AbinitInput
 from abipy.core.structure import Structure as AbiStructure
 from abipy.data.hgh_pseudos import HGH_TABLE
 
 from aiida import orm
-from aiida.common import datastructures
+from aiida.common import constants, datastructures, exceptions
 from aiida.engine import CalcJob
 from aiida.orm import RemoteData
 from aiida_pseudo.data.pseudo import Psp8Data, JthXmlData
@@ -19,12 +19,14 @@ class AbinitCalculation(CalcJob):
     """AiiDA calculation plugin wrapping the abinit executable."""
 
     # Defaults.
-    _DEFAULT_INPUT_FILE = 'aiida.in'
-    _DEFAULT_OUTPUT_FILE = 'aiida.out'
-    _DEFAULT_PROJECT_NAME = 'aiida'
-    _DEFAULT_GSR_FILE_NAME = _DEFAULT_PROJECT_NAME + 'o_GSR.nc'
-    _DEFAULT_HIST_FILE_NAME = _DEFAULT_PROJECT_NAME + 'o_HIST.nc'
-    _DEFAULT_PSEUDO_SUBFOLDER = './pseudo/'
+    _PROJECT_NAME = 'aiida'
+    _DEFAULT_INPUT_FILE = f'{_PROJECT_NAME}.in'
+    _DEFAULT_OUTPUT_FILE = f'{_PROJECT_NAME}.out'
+    _DEFAULT_GSR_FILE_NAME = f'{_PROJECT_NAME}o_GSR.nc'
+    _DEFAULT_HIST_FILE_NAME = f'{_PROJECT_NAME}o_HIST.nc'
+    _PSEUDO_SUBFOLDER = './pseudo/'
+
+    _BLOCKED_KEYWORDS = ['ngkpt', 'kptopt', 'acell', 'angdeg', 'rprim', 'brvltt']
 
     @classmethod
     def define(cls, spec):
@@ -118,73 +120,98 @@ class AbinitCalculation(CalcJob):
                     help='Trajectory of various output quantities over the calculation if present.')
         spec.default_output_node = 'output_parameters'
 
+    def _validate_parameters(self):
+        """Validate the 'parameters' input `Dict` node.
+
+        Check that no blocked keywords are present.
+        """
+        keyword_intersection = set(self.inputs.parameters.keys()) & set(self._BLOCKED_KEYWORDS)
+        if len(keyword_intersection) > 0:
+            raise exceptions.InputValidationError(
+                f"Some blocked input keywords were provided: {', '.join(list(keyword_intersection))}"
+            )
+
+    def _validate_pseudos(self):
+        """Validate the 'pseudos' input namespace.
+
+        Check that each 'kind' in the input `StructureData` has a corresponding pseudopotential.
+        """
+        kinds = [kind.name for kind in self.inputs.structure.kinds]
+        if set(kinds) != set(self.inputs.pseudos.keys()):
+            raise exceptions.InputValidationError(
+                'Mismatch between the defined pseudos and the list of kinds of the structure.\n'
+                'Pseudos: {};\nKinds:{}'.format(', '.join(list(self.inputs.pseudos.keys())), ', '.join(list(kinds)))
+            )
+
     def prepare_for_submission(self, folder):
-        """Create input files.
+        """Create the input file(s) from the input nodes.
 
         :param folder: an `aiida.common.folders.Folder` where the plugin should temporarily place all files needed by
             the calculation.
         :return: `aiida.common.datastructures.CalcInfo` instance
         """
         ### SETUP ###
+        # Set up any variables, containers, etc. necessary for the submission preparation
+        # FILE LISTS
         local_copy_list = []
 
-        ### INPUT CHECK ###
-        # PSEUDOS
-        for kind in self.inputs.structure.get_kind_names():
-            if kind not in self.inputs.pseudos:
-                raise ValueError(f'no pseudo available for element {kind}')
-            elif not isinstance(self.inputs.pseudos[kind], (Psp8Data, JthXmlData)):
-                raise ValueError(f'pseudo for element {kind} is not of type Psp8Data or JthXmlData')
-
-        # KPOINTS
-        if 'ngkpt' in self.inputs.parameters.keys():
-            raise ValueError('`ngkpt` should not be specified in input parameters')
-        if 'kptopt' in self.inputs.parameters.keys():
-            raise ValueError('`kptopt` should not be specified in input parameters')
+        ### INPUT VALIDATION ###
+        # Perform input validation
+        self._validate_parameters()
+        self._validate_pseudos()
 
         ### PREPARATION ###
-        # PSEUDOS
-        folder.get_subfolder(self._DEFAULT_PSEUDO_SUBFOLDER, create=True)
-        for kind in self.inputs.structure.get_kind_names():
-            psp = self.inputs.pseudos[kind]
-            local_copy_list.append((psp.uuid, psp.filename, self._DEFAULT_PSEUDO_SUBFOLDER + kind + '.psp8'))
-
-        # KPOINTS
-        kpoints_mesh = self.inputs.kpoints.get_kpoints_mesh()[0]
-
+        # Prepare inputs for passing to abipy which does the heavy lifting
         # STRUCTURE
+        # abipy has its own subclass of pymatgen's `Structure`, so we use that
         pmg_structure = self.inputs.structure.get_pymatgen()
         abi_structure = AbiStructure.as_structure(pmg_structure)
         abi_structure = abi_structure.abi_sanitize(primitive=False)
 
-        ### INPUTS ###
+        # PSEUDOS
+        # Set up the pseudopotential subfolder and make sure to copy over the pseudopotential files
+        folder.get_subfolder(self._PSEUDO_SUBFOLDER, create=True)
+        for kind in self.inputs.structure.get_kind_names():
+            psp = self.inputs.pseudos[kind]
+            local_copy_list.append((psp.uuid, psp.filename, f'{self._PSEUDO_SUBFOLDER}{psp.filename}'))
+        # Pseudopotentials _must_ be listed in the same order as 'znucl' in the input file.
+        # So, we need to get 'znucl' as abipy will write it then construct the appropriate 'pseudos' string.
+        znucl = structure_to_abivars(abi_structure)['znucl']
+        ordered_pseudo_filenames = [self.inputs.pseudos[constants.elements[Z]['symbol']].filename for Z in znucl]
+        pseudo_parameters = {
+            'pseudos': '"' + ', '.join(ordered_pseudo_filenames) + '"',
+            'pp_dirpath': f'"{self._PSEUDO_SUBFOLDER}"'
+        }
+
+        # KPOINTS
+        kpoints_mesh = self.inputs.kpoints.get_kpoints_mesh()[0]
+        # k-points are provided to abipy separately from the main input parameters, so we pop out
+        # parameters related to the k-points
         input_parameters = self.inputs.parameters.get_dict()
         shiftk = input_parameters.pop('shiftk', [0.0, 0.0, 0.0])
 
-        # There must be a better way to do this
-        # Maybe we can convert the PseudoPotential objects into pymatgen Pseudo objects?
-        znucl = structure_to_abivars(self.inputs.structure.get_pymatgen())['znucl']
-        pseudo_parameters = {
-            'pseudos': '"' + ', '.join([Element.from_Z(Z).symbol + '.psp8' for Z in znucl]) + '"',
-            'pp_dirpath': '"' + self._DEFAULT_PSEUDO_SUBFOLDER + '"'
-        }
-
+        ### INPUT CREATION AND WRITING ###
+        # Use abipy to write the input file
+        # ABINIT INPUT
         input_parameters = {**input_parameters, **pseudo_parameters}
 
-        abin = AbinitInput(
+        # We give abipy the HGH_TABLE only so it won't error; we don't actually print these to file.
+        abi_input = AbinitInput(
             structure=abi_structure,
             pseudos=HGH_TABLE,
             abi_kwargs=input_parameters
         )
-        abin.set_kmesh(
+        abi_input.set_kmesh(
             ngkpt=kpoints_mesh,
             shiftk=shiftk
         )
 
+        # WRITE INPUT FILE
         with io.open(folder.get_abs_path(self._DEFAULT_INPUT_FILE), mode='w', encoding='utf-8') as stream:
-            stream.write(abin.to_string(with_pseudos=False))
+            stream.write(abi_input.to_string(with_pseudos=False))
 
         ### CODE ###
+        # Set up the code info to pass to `CalcInfo`
         codeinfo = datastructures.CodeInfo()
         codeinfo.code_uuid = self.inputs.code.uuid
         codeinfo.cmdline_params = [self.options.input_filename]
@@ -192,6 +219,7 @@ class AbinitCalculation(CalcJob):
         codeinfo.withmpi = self.inputs.metadata.options.withmpi
 
         ### CALC INFO ###
+        # Set up the calc info so AiiDA knows what to do with everything
         calcinfo = datastructures.CalcInfo()
         calcinfo.codes_info = [codeinfo]
         calcinfo.stdin_name = self.options.input_filename

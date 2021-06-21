@@ -1,6 +1,7 @@
 # `aiida-abinit`
 [![PyPI version](https://badge.fury.io/py/aiida-abinit.svg)](https://badge.fury.io/py/aiida-abinit)
-[![Build Status](https://github.com/sponce24/aiida-abinit/workflows/aiida-abinit/badge.svg?branch=develop&event=push)](https://github.com/sponce24/aiida-abinit/actions)
+[![Build Status](https://github.com/sponce24/aiida-abinit/actions/workflows/ci.yml/badge.svg?event=push)](https://github.com/sponce24/aiida-abinit/actions)
+
 
 This is an [AiiDA](http://www.aiida.net/) plugin for [ABINIT](https://www.abinit.org/).
 

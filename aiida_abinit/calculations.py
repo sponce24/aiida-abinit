@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """CalcJob class for Abinit."""
 import io
+import os
+import typing as ty
 
 # from pymatgen.core import Element
 from pymatgen.io.abinit.abiobjects import structure_to_abivars
@@ -14,16 +16,13 @@ from aiida.engine import CalcJob
 from aiida.orm import RemoteData
 from aiida_pseudo.data.pseudo import Psp8Data, JthXmlData
 
+from aiida_abinit.utils import uppercase_dict, seconds_to_timelimit
+
 
 class AbinitCalculation(CalcJob):
     """AiiDA calculation plugin wrapping the abinit executable."""
 
-    # Defaults.
-    _PROJECT_NAME = 'aiida'
-    _DEFAULT_INPUT_FILE = f'{_PROJECT_NAME}.in'
-    _DEFAULT_OUTPUT_FILE = f'{_PROJECT_NAME}.out'
-    _DEFAULT_GSR_FILE_NAME = f'{_PROJECT_NAME}o_GSR.nc'
-    _DEFAULT_HIST_FILE_NAME = f'{_PROJECT_NAME}o_HIST.nc'
+    _DEFAULT_PREFIX = 'aiida'
     _PSEUDO_SUBFOLDER = './pseudo/'
 
     _BLOCKED_KEYWORDS = ['ngkpt', 'kptopt', 'acell', 'angdeg', 'rprim', 'brvltt']
@@ -35,19 +34,9 @@ class AbinitCalculation(CalcJob):
         super(AbinitCalculation, cls).define(spec)
 
         # Inputs
-        spec.input('metadata.options.input_filename',
+        spec.input('metadata.options.prefix',
                    valid_type=str,
-                   default=cls._DEFAULT_INPUT_FILE)
-        spec.input('metadata.options.output_filename',
-                   valid_type=str,
-                   default=cls._DEFAULT_OUTPUT_FILE)
-        spec.input('metadata.options.output_gsr_filename',
-                   valid_type=str,
-                   default=cls._DEFAULT_GSR_FILE_NAME)
-        spec.input('metadata.options.output_hist_filename',
-                   valid_type=str,
-                   required=False,
-                   default=cls._DEFAULT_HIST_FILE_NAME)
+                   default=cls._DEFAULT_PREFIX)
         spec.input('metadata.options.withmpi',
                    valid_type=bool,
                    default=True)
@@ -75,8 +64,7 @@ class AbinitCalculation(CalcJob):
                              dynamic=True)
 
         spec.inputs['metadata']['options']['parser_name'].default = 'abinit'
-        spec.inputs['metadata']['options']['resources'].default = {
-                'num_machines': 1, 'num_mpiprocs_per_machine': 1, }
+        spec.inputs['metadata']['options']['resources'].default = {'num_machines': 1, 'num_mpiprocs_per_machine': 1}
 
         # Unrecoverable errors: file missing
         spec.exit_code(100, 'ERROR_MISSING_OUTPUT_FILES',
@@ -143,59 +131,48 @@ class AbinitCalculation(CalcJob):
                 'Pseudos: {};\nKinds:{}'.format(', '.join(list(self.inputs.pseudos.keys())), ', '.join(list(kinds)))
             )
 
-    def prepare_for_submission(self, folder):
-        """Create the input file(s) from the input nodes.
+    def _generate_inputdata(self,
+                            parameters: orm.Dict,
+                            pseudos,
+                            structure: orm.StructureData,
+                            kpoints: orm.KpointsData) -> ty.Tuple[str, list]:
+        """Generate the input file content and list of pseudopotential files to copy.
 
-        :param folder: an `aiida.common.folders.Folder` where the plugin should temporarily place all files needed by
-            the calculation.
-        :return: `aiida.common.datastructures.CalcInfo` instance
+        :param parameters: input parameters Dict
+        :param pseudos: pseudopotential input namespace
+        :param structure: input structure
+        :param kpoints: input kpoints
+        :returns: input file content, pseudopotential copy list
         """
-        ### SETUP ###
-        # Set up any variables, containers, etc. necessary for the submission preparation
-        # FILE LISTS
-        local_copy_list = []
+        local_copy_pseudo_list = []
 
-        ### INPUT VALIDATION ###
-        # Perform input validation
-        self._validate_parameters()
-        self._validate_pseudos()
-
-        ### PREPARATION ###
-        # Prepare inputs for passing to abipy which does the heavy lifting
-        # STRUCTURE
-        # abipy has its own subclass of pymatgen's `Structure`, so we use that
-        pmg_structure = self.inputs.structure.get_pymatgen()
+        # abipy has its own subclass of Pymatgen's `Structure`, so we use that
+        pmg_structure = structure.get_pymatgen()
         abi_structure = AbiStructure.as_structure(pmg_structure)
         abi_structure = abi_structure.abi_sanitize(primitive=False)
 
-        # PSEUDOS
-        # Set up the pseudopotential subfolder and make sure to copy over the pseudopotential files
-        folder.get_subfolder(self._PSEUDO_SUBFOLDER, create=True)
-        for kind in self.inputs.structure.get_kind_names():
-            psp = self.inputs.pseudos[kind]
-            local_copy_list.append((psp.uuid, psp.filename, f'{self._PSEUDO_SUBFOLDER}{psp.filename}'))
+        for kind in structure.get_kind_names():
+            pseudo = pseudos[kind]
+            local_copy_pseudo_list.append((pseudo.uuid, pseudo.filename, f'{self._PSEUDO_SUBFOLDER}{pseudo.filename}'))
         # Pseudopotentials _must_ be listed in the same order as 'znucl' in the input file.
         # So, we need to get 'znucl' as abipy will write it then construct the appropriate 'pseudos' string.
         znucl = structure_to_abivars(abi_structure)['znucl']
-        ordered_pseudo_filenames = [self.inputs.pseudos[constants.elements[Z]['symbol']].filename for Z in znucl]
+        ordered_pseudo_filenames = [pseudos[constants.elements[Z]['symbol']].filename for Z in znucl]
         pseudo_parameters = {
             'pseudos': '"' + ', '.join(ordered_pseudo_filenames) + '"',
             'pp_dirpath': f'"{self._PSEUDO_SUBFOLDER}"'
         }
 
-        # KPOINTS
-        kpoints_mesh = self.inputs.kpoints.get_kpoints_mesh()[0]
+        input_parameters = parameters.get_dict()
         # k-points are provided to abipy separately from the main input parameters, so we pop out
         # parameters related to the k-points
-        input_parameters = self.inputs.parameters.get_dict()
         shiftk = input_parameters.pop('shiftk', [0.0, 0.0, 0.0])
+        # NOTE: currently, only k-point mesh are supported, not k-point paths
+        kpoints_mesh = kpoints.get_kpoints_mesh()[0]
 
-        ### INPUT CREATION AND WRITING ###
-        # Use abipy to write the input file
-        # ABINIT INPUT
+        # use abipy to write the input file
         input_parameters = {**input_parameters, **pseudo_parameters}
-
-        # We give abipy the HGH_TABLE only so it won't error; we don't actually print these to file.
+        # give abipy the HGH_TABLE only so it won't error, but don't actually print these to file
         abi_input = AbinitInput(
             structure=abi_structure,
             pseudos=HGH_TABLE,
@@ -206,39 +183,127 @@ class AbinitCalculation(CalcJob):
             shiftk=shiftk
         )
 
-        # WRITE INPUT FILE
-        with io.open(folder.get_abs_path(self._DEFAULT_INPUT_FILE), mode='w', encoding='utf-8') as stream:
-            stream.write(abi_input.to_string(with_pseudos=False))
+        return abi_input.to_string(with_pseudos=False), local_copy_pseudo_list
 
-        ### CODE ###
-        # Set up the code info to pass to `CalcInfo`
+    def _generate_cmdline_params(self, settings: dict) -> ty.List[str]:
+        # input file has to be the first parameter
+        cmdline_params = [self.metadata.options.input_filename]
+        # if a max wallclock is set in the options but the timelimit hasn't been manually set, we set it
+        if 'max_wallclock_seconds' in self.metadata.options:
+            max_wallclock_seconds = self.metadata.options.max_wallclock_seconds
+            cmdline_params.extend(['--timelimit', seconds_to_timelimit(max_wallclock_seconds)])
+        # if a number of OMP threads is set in the options but the commandline flag hasn't been manually set, we set it
+        if 'num_omp_threads' in self.metadata.options.resources:
+            omp_num_threads = self.metadata.options.resources['omp_num_threads']
+            cmdline_params.extend(['--omp-num-threads', f'{omp_num_threads:d}'])
+        # enable verbose mode if requested in the settings and not already manually set
+        if settings.pop('VERBOSE', False):
+            cmdline_params.append('--verbose')
+        # enable a dry run if requested in the settings and not already manually set
+        # NOTE: don't pop here, we need to know about dry runs when generating the retrieve list
+        if settings.get('DRY_RUN', False):
+            cmdline_params.append('--dry-run')
+        return cmdline_params
+
+    def _generate_retrieve_list(self, parameters: orm.Dict, settings: dict, ) -> list:
+        """Generate the list of files to retrieve based on the type of calculation requested in the input parameters.
+
+        :param parameters: input parameters
+        :returns: list of files to retreive
+        """
+        parameters = parameters.get_dict()
+        prefix = self.metadata.options.prefix
+        # start with the files that should always be retrieved: stdout, .abo, o_OUT.nc, and manually provided files
+        retrieve_list = [f'{prefix}{postfix}' for postfix in ['.out', '.abo', 'o_OUT.nc']]
+        retrieve_list += settings.pop('ADDITIONAL_RETRIEVE_LIST', [])
+        # in all cases except for dry runs: o_EIG.nc and o_GSR.nc
+        # NOTE: pop here, we don't need this setting anymore
+        if not settings.pop('DRY_RUN', False):
+            retrieve_list += [f'{prefix}{postfix}' for postfix in ['o_EIG.nc', 'o_GSR.nc']]
+        # when moving ions
+        if parameters.get('ionmov', 0) > 0:
+            retrieve_list += [f'{prefix}{postfix}' for postfix in ['o_HIST.nc']]
+        # there may be duplicates from the ADDITIONAL_RETRIEVE_LIST setting, so clean up using set()
+        return list(set(retrieve_list))
+
+    def prepare_for_submission(self, folder):
+        """Create the input file(s) from the input nodes.
+
+        :param folder: an `aiida.common.folders.Folder` where the plugin should temporarily place all files needed by
+            the calculation.
+        :return: `aiida.common.datastructures.CalcInfo` instance
+        """
+        # process the settings so that capitalization isn't an issue
+        settings = uppercase_dict(self.inputs.settings.get_dict()) if 'settings' in self.inputs else {}
+
+        # validate the input parameters and pseudopotentials
+        self._validate_parameters()
+        self._validate_pseudos()
+
+        # create lists which specify files to copy and symlink
+        local_copy_list = []
+        remote_copy_list = []
+        remote_symlink_list = []
+
+        # create the subfolder which will contain the pseudopotential files
+        folder.get_subfolder(self._PSEUDO_SUBFOLDER, create=True)
+
+        # set the input and stdout filenames from the prefix
+        self.metadata.options.input_filename = f'{self.metadata.options.prefix}.in'
+        self.metadata.options.output_filename = f'{self.metadata.options.prefix}.out'
+
+        # generate the input file content and list of pseudopotential files to copy
+        arguments = [
+            self.inputs.parameters,
+            self.inputs.pseudos,
+            self.inputs.structure,
+            self.inputs.kpoints
+        ]
+        input_filecontent, local_copy_pseudo_list = self._generate_inputdata(*arguments)
+
+        # merge the pseudopotential copy list with the overall copylist and write the input file
+        local_copy_list += local_copy_pseudo_list
+        with io.open(folder.get_abs_path(self.metadata.options.input_filename), mode='w', encoding='utf-8') as stream:
+            stream.write(input_filecontent)
+
+        # list the files to copy or symlink in the case of a restart
+        if 'parent_folder' in self.inputs:
+            # symlink by default if on the same computer, otherwise copy by default
+            same_computer = self.inputs.code.computer.uuid == self.inputs.parent_folder.computer.uuid
+            if settings.pop('PARENT_FOLDER_SYMLINK', same_computer):
+                remote_symlink_list.append((
+                    self.inputs.parent_folder.computer.uuid,
+                    os.path.join(self.inputs.parent_folder.get_remote_path(), '*'),
+                    './')
+                )
+            else:
+                remote_copy_list.append((
+                    self.inputs.parent_folder.computer.uuid,
+                    os.path.join(self.inputs.parent_folder.get_remote_path(), '*'),
+                    './')
+                )
+
+        # generate the commandline parameters
+        cmdline_params = self._generate_cmdline_params(settings)
+
+        # generate list of files to retrieve from wherever the calculation is run
+        retrieve_list = self._generate_retrieve_list(self.inputs.parameters, settings)
+
+        # set up the code info to pass to `CalcInfo`
         codeinfo = datastructures.CodeInfo()
         codeinfo.code_uuid = self.inputs.code.uuid
-        codeinfo.cmdline_params = [self.options.input_filename]
+        codeinfo.cmdline_params = cmdline_params
         codeinfo.stdout_name = self.metadata.options.output_filename
         codeinfo.withmpi = self.inputs.metadata.options.withmpi
 
-        ### CALC INFO ###
-        # Set up the calc info so AiiDA knows what to do with everything
+        # set up the calc info so AiiDA knows what to do with everything
         calcinfo = datastructures.CalcInfo()
         calcinfo.codes_info = [codeinfo]
-        calcinfo.stdin_name = self.options.input_filename
-        calcinfo.stdout_name = self.options.output_filename
-        calcinfo.retrieve_list = [self.metadata.options.output_filename,
-                                  self.metadata.options.output_gsr_filename,
-                                  self.metadata.options.output_hist_filename]
-        calcinfo.remote_symlink_list = []
-        calcinfo.remote_copy_list = []
+        calcinfo.stdin_name =  self.metadata.options.input_filename
+        calcinfo.stdout_name = self.metadata.options.output_filename
+        calcinfo.retrieve_list = retrieve_list
+        calcinfo.remote_symlink_list = remote_symlink_list
+        calcinfo.remote_copy_list = remote_copy_list
         calcinfo.local_copy_list = local_copy_list
-        if 'parent_calc_folder' in self.inputs:
-            comp_uuid = self.inputs.parent_calc_folder.computer.uuid
-            remote_path = self.inputs.parent_calc_folder.get_remote_path()
-            copy_info = (comp_uuid, remote_path, self._DEFAULT_PARENT_CALC_FLDR_NAME)
-            # If running on the same computer - make a symlink.
-            if self.inputs.code.computer.uuid == comp_uuid:
-                calcinfo.remote_symlink_list.append(copy_info)
-            # If not - copy the folder.
-            else:
-                calcinfo.remote_copy_list.append(copy_info)
 
         return calcinfo

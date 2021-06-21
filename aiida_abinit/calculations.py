@@ -149,7 +149,7 @@ class AbinitCalculation(CalcJob):
         # abipy has its own subclass of Pymatgen's `Structure`, so we use that
         pmg_structure = structure.get_pymatgen()
         abi_structure = AbiStructure.as_structure(pmg_structure)
-        abi_structure = abi_structure.abi_sanitize(primitive=False)
+        abi_structure = abi_structure.abi_sanitize(primitive=True)
 
         for kind in structure.get_kind_names():
             pseudo = pseudos[kind]

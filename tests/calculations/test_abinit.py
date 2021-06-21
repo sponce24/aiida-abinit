@@ -3,7 +3,7 @@
 from aiida.common import datastructures
 
 
-def test_pw_default(fixture_sandbox, generate_calc_job, generate_inputs_abinit, file_regression):
+def test_abinit_default(fixture_sandbox, generate_calc_job, generate_inputs_abinit, file_regression):
     """Test a default `Abinitcalculation`."""
     entry_point_name = 'abinit'
 
@@ -11,9 +11,9 @@ def test_pw_default(fixture_sandbox, generate_calc_job, generate_inputs_abinit, 
     calc_info = generate_calc_job(fixture_sandbox, entry_point_name, inputs)
     psp8 = inputs['pseudos']['Si']
 
-    cmdline_params = ['-in', 'aiida.in']
+    cmdline_params = ['aiida.in']
     local_copy_list = [(psp8.uuid, psp8.filename, './pseudo/Si.psp8')]
-    retrieve_list = ['aiida.out', 'aiidao_GSR.nc']
+    retrieve_list = ['aiida.out', 'aiidao_GSR.nc', 'aiidao_HIST.nc']
 
     # Check the attributes of the returned `CalcInfo`
     assert isinstance(calc_info, datastructures.CalcInfo)

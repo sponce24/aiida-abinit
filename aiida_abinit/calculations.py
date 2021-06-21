@@ -5,6 +5,7 @@ import io
 from pymatgen.core import Element
 from pymatgen.io.abinit.abiobjects import structure_to_abivars
 from abipy.abio.inputs import AbinitInput
+from abipy.core.structure import Structure as AbiStructure
 from abipy.data.hgh_pseudos import HGH_TABLE
 
 from aiida import orm
@@ -155,6 +156,11 @@ class AbinitCalculation(CalcJob):
         # KPOINTS
         kpoints_mesh = self.inputs.kpoints.get_kpoints_mesh()[0]
 
+        # STRUCTURE
+        pmg_structure = self.inputs.structure.get_pymatgen()
+        abi_structure = AbiStructure.as_structure(pmg_structure)
+        abi_structure = abi_structure.abi_sanitize(primitive=False)
+
         ### INPUTS ###
         input_parameters = self.inputs.parameters.get_dict()
         shiftk = input_parameters.pop('shiftk', [0.0, 0.0, 0.0])
@@ -170,7 +176,7 @@ class AbinitCalculation(CalcJob):
         input_parameters = {**input_parameters, **pseudo_parameters}
 
         abin = AbinitInput(
-            structure=self.inputs.structure.get_pymatgen(),
+            structure=abi_structure,
             pseudos=HGH_TABLE,
             abi_kwargs=input_parameters
         )

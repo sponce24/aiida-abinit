@@ -9,7 +9,7 @@ from abipy.flowtk import events
 
 from aiida.common import exceptions
 from aiida.engine import ExitCode
-from aiida.orm import Dict, StructureData, TrajectoryData
+from aiida.orm import BandsData, Dict, StructureData, TrajectoryData
 from aiida.parsers.parser import Parser
 
 UNITS_SUFFIX = '_units'
@@ -159,6 +159,7 @@ class AbinitParser(Parser):
                 'pressure': float(gsr.pressure),
                 'pressure' + UNITS_SUFFIX: DEFAULT_STRESS_UNITS
             }
+
             try:
                 # will return an integer 0 if non-magnetic calculation is run; convert it to a float
                 total_magnetization = float(gsr.ebands.get_collinear_mag())
@@ -170,6 +171,14 @@ class AbinitParser(Parser):
                     pass
                 else:
                     raise valerr
+
+            try:
+                bands_data = BandsData()
+                bands_data.set_kpoints(gsr.ebands.kpoints.get_cart_coords())
+                bands_data.set_bands(np.array(gsr.ebands.eigens))
+                self.out('output_bands', bands_data)
+            except:  # pylint: disable=bare-except
+                pass
 
         self.out('output_parameters', Dict(dict=gsr_data))
 

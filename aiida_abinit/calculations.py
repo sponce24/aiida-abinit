@@ -106,6 +106,10 @@ class AbinitCalculation(CalcJob):
                     valid_type=orm.TrajectoryData,
                     required=False,
                     help='Trajectory of various output quantities over the calculation if present.')
+        spec.output('output_bands',
+                    valid_type=orm.BandsData,
+                    required=False,
+                    help='Final electronic bands if present.')
         spec.default_output_node = 'output_parameters'
 
     def _validate_parameters(self):

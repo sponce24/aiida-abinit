@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+"""Utility functions."""
 import tempfile
 import typing as typ
 
@@ -10,7 +12,7 @@ from aiida_pseudo.data.pseudo import Psp8Data, JthXmlData
 
 
 def array_to_input_string(array: typ.Union[list, tuple, np.ndarray]) -> str:
-    """Convert an input array to a string formatted for Abinit"""
+    """Convert an input array to a string formatted for Abinit."""
 
     nested = False
     input_string = ''
@@ -30,13 +32,12 @@ def array_to_input_string(array: typ.Union[list, tuple, np.ndarray]) -> str:
     return input_string
 
 
-def aiida_psp8_to_abipy_pseudo(aiida_pseudo: Psp8Data,
-                               pseudo_dir: str = '') -> Pseudo:
-    """Convert an aiida-pseudo Psp8Data into a pymatgen/abipy Pseudo"""
-    with tempfile.NamedTemporaryFile('w', encoding='utf-8') as f:
-        f.write(aiida_pseudo.get_content())
-        abinit_pseudo = Pseudo.from_file(f.name)
-        f.close()
+def aiida_psp8_to_abipy_pseudo(aiida_pseudo: Psp8Data, pseudo_dir: str = '') -> Pseudo:
+    """Convert an aiida-pseudo Psp8Data into a pymatgen/abipy Pseudo."""
+    with tempfile.NamedTemporaryFile('w', encoding='utf-8') as stream:
+        stream.write(aiida_pseudo.get_content())
+        abinit_pseudo = Pseudo.from_file(stream.name)
+        stream.close()
     abinit_pseudo.path = pseudo_dir + aiida_pseudo.attributes['filename']
     return abinit_pseudo
 
@@ -62,23 +63,19 @@ def validate_and_prepare_pseudos_inputs(
     """
 
     if isinstance(pseudos, (str, orm.Str)):
-        raise TypeError(
-            'you passed "pseudos" as a string - maybe you wanted to pass it as "pseudo_family" instead?'
-        )
+        raise TypeError('you passed "pseudos" as a string - maybe you wanted to pass it as "pseudo_family" instead?')
 
     for kind in structure.get_kind_names():
         if kind not in pseudos:
             raise ValueError(f'no pseudo available for element {kind}')
         elif not isinstance(pseudos[kind], (Psp8Data, JthXmlData)):
-            raise ValueError(
-                f'pseudo for element {kind} is not of type Psp8Data or JthXmlData')
+            raise ValueError(f'pseudo for element {kind} is not of type Psp8Data or JthXmlData')
 
     return pseudos
 
 
 @calcfunction
-def create_kpoints_from_distance(structure: orm.StructureData,
-                                 distance: orm.Float) -> orm.KpointsData:
+def create_kpoints_from_distance(structure: orm.StructureData, distance: orm.Float) -> orm.KpointsData:
     """Generate a uniformly spaced kpoint mesh for a given structure.
 
     The spacing between kpoints in reciprocal space is guaranteed to be at least the defined distance.
@@ -96,10 +93,8 @@ def create_kpoints_from_distance(structure: orm.StructureData,
     lengths_vector = [np.linalg.norm(vector) for vector in structure.cell]
     lengths_kpoint = kpoints.get_kpoints_mesh()[0]
 
-    is_symmetric_cell = all(
-        abs(length - lengths_vector[0]) < epsilon for length in lengths_vector)
-    is_symmetric_mesh = all(length == lengths_kpoint[0]
-                            for length in lengths_kpoint)
+    is_symmetric_cell = all(abs(length - lengths_vector[0]) < epsilon for length in lengths_vector)
+    is_symmetric_mesh = all(length == lengths_kpoint[0] for length in lengths_kpoint)
 
     # If the vectors of the cell all have the same length, the kpoint mesh should be isotropic as well
     if is_symmetric_cell and not is_symmetric_mesh:

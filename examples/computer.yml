@@ -10,4 +10,3 @@ mpiprocs_per_machine: "2"
 shebang: "#!/bin/bash"
 prepend_text: " "
 append_text: " "
-

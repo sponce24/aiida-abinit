@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Base Abinit Workchain"""
+"""Base Abinit WorkChain implementation."""
 from aiida import orm
 from aiida.common import AttributeDict, exceptions
-from aiida.engine import (BaseRestartWorkChain, ProcessHandlerReport,
-                          ToContext, WorkChain, append_, if_, process_handler,
-                          while_)
-from aiida.plugins import CalculationFactory, WorkflowFactory
-from aiida_abinit.utils import validate_and_prepare_pseudos_inputs, create_kpoints_from_distance
+from aiida.engine import (BaseRestartWorkChain, ProcessHandlerReport, process_handler, while_)
+from aiida.plugins import CalculationFactory
+from aiida_abinit.utils import (create_kpoints_from_distance, validate_and_prepare_pseudos_inputs)
 
 AbinitCalculation = CalculationFactory('abinit')
 
@@ -22,12 +20,20 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
         # yapf: disable
         super().define(spec)
 
-        spec.input('kpoints', valid_type=orm.KpointsData, required=False,
-            help='An explicit k-points mesh (list not currently supported). Either this or `kpoints_distance` has to be provided.')
-        spec.input('kpoints_distance', valid_type=orm.Float, required=False,
-            help='The minimum desired distance in 1/Å between k-points in reciprocal space. The explicit k-points will '
-                 'be generated automatically by a calculation function based on the input structure.')
-        spec.expose_inputs(AbinitCalculation, namespace='abinit', exclude=('kpoints',))
+        spec.input('kpoints',
+                   valid_type=orm.KpointsData,
+                   required=False,
+                   help='An explicit k-points mesh (list not currently supported). Either this or `kpoints_distance` '
+                        'has to be provided.')
+        spec.input('kpoints_distance',
+                   valid_type=orm.Float,
+                   required=False,
+                   help='The minimum desired distance in 1/Å between k-points in reciprocal space. The explicit '
+                        'k-point mesh will be generated automatically by a calculation function based on the input '
+                        'structure.')
+        spec.expose_inputs(AbinitCalculation,
+                           namespace='abinit',
+                           exclude=('kpoints',))
 
         spec.outline(
             cls.setup,
@@ -146,7 +152,7 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
         """
         arguments = [calculation.process_label, calculation.pk, calculation.exit_status, calculation.exit_message]
         self.report('{}<{}> failed with exit status {}: {}'.format(*arguments))
-        self.report('Action taken: {}'.format(action))
+        self.report(f'Action taken: {action}')
 
     @process_handler(priority=580, exit_codes=[
         AbinitCalculation.exit_codes.ERROR_OUT_OF_WALLTIME,

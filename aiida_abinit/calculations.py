@@ -216,13 +216,13 @@ class AbinitCalculation(CalcJob):
         # start with the files that should always be retrieved: stdout, .abo, o_OUT.nc, and manually provided files
         retrieve_list = [f'{prefix}{postfix}' for postfix in ['.out', '.abo', 'o_OUT.nc']]
         retrieve_list += settings.pop('ADDITIONAL_RETRIEVE_LIST', [])
-        # in all cases except for dry runs: o_EIG.nc and o_GSR.nc
         # NOTE: pop here, we don't need this setting anymore
         if not settings.pop('DRY_RUN', False):
+            # in all cases except for dry runs: o_EIG.nc and o_GSR.nc
             retrieve_list += [f'{prefix}{postfix}' for postfix in ['o_EIG.nc', 'o_GSR.nc']]
-        # when moving ions
-        if parameters.get('ionmov', 0) > 0:
-            retrieve_list += [f'{prefix}{postfix}' for postfix in ['o_HIST.nc']]
+            # when moving ions: o_HIST.nc
+            if parameters.get('ionmov', 0) > 0:
+                retrieve_list += [f'{prefix}{postfix}' for postfix in ['o_HIST.nc']]
         # there may be duplicates from the ADDITIONAL_RETRIEVE_LIST setting, so clean up using set()
         return list(set(retrieve_list))
 

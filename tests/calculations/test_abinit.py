@@ -16,7 +16,7 @@ def test_abinit_default(fixture_sandbox, generate_calc_job, generate_inputs_abin
 
     cmdline_params = ['aiida.in', '--timelimit', '30:00']
     local_copy_list = [(psp8.uuid, psp8.filename, './pseudo/Si.psp8')]
-    retrieve_list = ['aiida.out', 'aiida.abo', 'aiidao_OUT.nc', 'aiidao_EIG.nc', 'aiidao_GSR.nc']
+    retrieve_list = ['aiida.out', 'aiidao_GSR.nc']
 
     # Check the attributes of the returned `CalcInfo`
     assert isinstance(calc_info, datastructures.CalcInfo)
@@ -34,12 +34,15 @@ def test_abinit_default(fixture_sandbox, generate_calc_job, generate_inputs_abin
     file_regression.check(input_written, encoding='utf-8', extension='.in')
 
 
+# yapf: disable
 @pytest.mark.parametrize(
     'ionmov,dry_run,retrieve_list',
-    [(0, False, ['aiida.out', 'aiida.abo', 'aiidao_OUT.nc', 'aiidao_EIG.nc', 'aiidao_GSR.nc']),
-     (2, False, ['aiida.out', 'aiida.abo', 'aiidao_OUT.nc', 'aiidao_EIG.nc', 'aiidao_GSR.nc', 'aiidao_HIST.nc']),
-     (0, True, ['aiida.out', 'aiida.abo', 'aiidao_OUT.nc']), (2, True, ['aiida.out', 'aiida.abo', 'aiidao_OUT.nc'])]
+    [(0, False, ['aiida.out', 'aiidao_GSR.nc']),
+     (2, False, ['aiida.out', 'aiidao_GSR.nc', 'aiidao_HIST.nc']),
+     (0, True, ['aiida.out']),
+     (2, True, ['aiida.out'])]
 )
+# yapf: enable
 def test_abinit_retrieve(
     fixture_sandbox, generate_calc_job, generate_inputs_abinit, file_regression, ionmov, dry_run, retrieve_list
 ):

@@ -217,13 +217,13 @@ class AbinitCalculation(CalcJob):
         """
         parameters = parameters.get_dict()
         prefix = self.metadata.options.prefix
-        # start with the files that should always be retrieved: stdout, .abo, o_OUT.nc, and manually provided files
-        retrieve_list = [f'{prefix}{postfix}' for postfix in ['.out', '.abo', 'o_OUT.nc']]
+        # start with the files that should always be retrieved: stdout, .abo, and manually provided files
+        retrieve_list = [f'{prefix}{postfix}' for postfix in ['.out']]
         retrieve_list += settings.pop('ADDITIONAL_RETRIEVE_LIST', [])
         # NOTE: pop here, we don't need this setting anymore
         if not settings.pop('DRY_RUN', False):
-            # in all cases except for dry runs: o_EIG.nc and o_GSR.nc
-            retrieve_list += [f'{prefix}{postfix}' for postfix in ['o_EIG.nc', 'o_GSR.nc']]
+            # in all cases except for dry runs: o_GSR.nc
+            retrieve_list += [f'{prefix}{postfix}' for postfix in ['o_GSR.nc']]
             # when moving ions: o_HIST.nc
             if parameters.get('ionmov', 0) > 0:
                 retrieve_list += [f'{prefix}{postfix}' for postfix in ['o_HIST.nc']]

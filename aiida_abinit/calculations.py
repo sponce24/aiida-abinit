@@ -4,7 +4,6 @@ import io
 import os
 import typing as ty
 
-# from pymatgen.core import Element
 from pymatgen.io.abinit.abiobjects import structure_to_abivars
 from abipy.abio.inputs import AbinitInput
 from abipy.core.structure import Structure as AbiStructure
@@ -13,7 +12,6 @@ from abipy.data.hgh_pseudos import HGH_TABLE
 from aiida import orm
 from aiida.common import constants, datastructures, exceptions
 from aiida.engine import CalcJob
-from aiida.orm import RemoteData
 from aiida_pseudo.data.pseudo import Psp8Data, JthXmlData
 
 from aiida_abinit.utils import uppercase_dict, seconds_to_timelimit
@@ -25,7 +23,7 @@ class AbinitCalculation(CalcJob):
     _DEFAULT_PREFIX = 'aiida'
     _PSEUDO_SUBFOLDER = './pseudo/'
 
-    _BLOCKED_KEYWORDS = ['ngkpt', 'kptopt', 'acell', 'angdeg', 'rprim', 'brvltt']
+    _BLOCKED_KEYWORDS = ['nshiftk', 'ngkpt', 'acell', 'angdeg', 'rprim', 'brvltt']
 
     @classmethod
     def define(cls, spec):
@@ -33,7 +31,6 @@ class AbinitCalculation(CalcJob):
         # yapf: disable
         super(AbinitCalculation, cls).define(spec)
 
-        # Inputs
         spec.input('metadata.options.prefix',
                    valid_type=str,
                    default=cls._DEFAULT_PREFIX)
@@ -55,7 +52,7 @@ class AbinitCalculation(CalcJob):
                    required=False,
                    help='Various special settings.')
         spec.input('parent_calc_folder',
-                   valid_type=RemoteData,
+                   valid_type=orm.RemoteData,
                    required=False,
                    help='A remote folder used for restarts.')
         spec.input_namespace('pseudos',
@@ -168,45 +165,53 @@ class AbinitCalculation(CalcJob):
         }
 
         input_parameters = parameters.get_dict()
-        # k-points are provided to abipy separately from the main input parameters, so we pop out
-        # parameters related to the k-points
-        shiftk = input_parameters.pop('shiftk', [0.0, 0.0, 0.0])
-        # NOTE: currently, only k-point mesh are supported, not k-point paths
-        kpoints_mesh = kpoints.get_kpoints_mesh()[0]
 
         # use abipy to write the input file
         input_parameters = {**input_parameters, **pseudo_parameters}
+
         # give abipy the HGH_TABLE only so it won't error, but don't actually print these to file
         abi_input = AbinitInput(
             structure=abi_structure,
             pseudos=HGH_TABLE,
             abi_kwargs=input_parameters
         )
-        abi_input.set_kmesh(
-            ngkpt=kpoints_mesh,
-            shiftk=shiftk
-        )
+        try:
+            abi_input.set_kmesh(
+                ngkpt=kpoints.get_kpoints_mesh()[0],
+                shiftk=input_parameters.pop('shiftk', [0.0, 0.0, 0.0]),
+                kptopt=input_parameters.pop('kptopt', 1)
+            )
+        except AttributeError:
+            abi_input['kptopt'] = input_parameters.pop('kptopt', 0)
+            abi_input['kptnrm'] = input_parameters.pop('kptnrm', 1)
+            abi_input['kpt'] = kpoints.get_kpoints()
+            abi_input['nkpt'] = len(abi_input['kpt'])
 
         return abi_input.to_string(with_pseudos=False), local_copy_pseudo_list
 
     def _generate_cmdline_params(self, settings: dict) -> ty.List[str]:
         # input file has to be the first parameter
         cmdline_params = [self.metadata.options.input_filename]
+
         # if a max wallclock is set in the options but the timelimit hasn't been manually set, we set it
         if 'max_wallclock_seconds' in self.metadata.options:
             max_wallclock_seconds = self.metadata.options.max_wallclock_seconds
             cmdline_params.extend(['--timelimit', seconds_to_timelimit(max_wallclock_seconds)])
+
         # if a number of OMP threads is set in the options but the commandline flag hasn't been manually set, we set it
         if 'num_omp_threads' in self.metadata.options.resources:
             omp_num_threads = self.metadata.options.resources['omp_num_threads']
             cmdline_params.extend(['--omp-num-threads', f'{omp_num_threads:d}'])
+
         # enable verbose mode if requested in the settings and not already manually set
         if settings.pop('VERBOSE', False):
             cmdline_params.append('--verbose')
         # enable a dry run if requested in the settings and not already manually set
+
         # NOTE: don't pop here, we need to know about dry runs when generating the retrieve list
         if settings.get('DRY_RUN', False):
             cmdline_params.append('--dry-run')
+
         return cmdline_params
 
     def _generate_retrieve_list(self, parameters: orm.Dict, settings: dict, ) -> list:
@@ -217,9 +222,11 @@ class AbinitCalculation(CalcJob):
         """
         parameters = parameters.get_dict()
         prefix = self.metadata.options.prefix
+
         # start with the files that should always be retrieved: stdout, .abo, and manually provided files
         retrieve_list = [f'{prefix}{postfix}' for postfix in ['.out']]
         retrieve_list += settings.pop('ADDITIONAL_RETRIEVE_LIST', [])
+
         # NOTE: pop here, we don't need this setting anymore
         if not settings.pop('DRY_RUN', False):
             # in all cases except for dry runs: o_GSR.nc
@@ -227,6 +234,7 @@ class AbinitCalculation(CalcJob):
             # when moving ions: o_HIST.nc
             if parameters.get('ionmov', 0) > 0:
                 retrieve_list += [f'{prefix}{postfix}' for postfix in ['o_HIST.nc']]
+
         # there may be duplicates from the ADDITIONAL_RETRIEVE_LIST setting, so clean up using set()
         return list(set(retrieve_list))
 

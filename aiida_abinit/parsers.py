@@ -12,6 +12,8 @@ from aiida.engine import ExitCode
 from aiida.orm import BandsData, Dict, StructureData, TrajectoryData
 from aiida.parsers.parser import Parser
 
+from aiida_abinit.utils import uppercase_dict
+
 UNITS_SUFFIX = '_units'
 DEFAULT_CHARGE_UNITS = 'e'
 DEFAULT_DIPOLE_UNITS = 'Debye'
@@ -31,6 +33,7 @@ class AbinitParser(Parser):
         """Parse outputs, store results in database."""
         ionmov = self.node.inputs['parameters'].get_dict().get('ionmov', 0)
         optcell = self.node.inputs['parameters'].get_dict().get('optcell', 0)
+        dry_run = uppercase_dict(self.node.inputs['settings'].get_dict()).get('DRY_RUN', False)
 
         if ionmov == 0 and optcell == 0:
             is_relaxation = False
@@ -46,14 +49,15 @@ class AbinitParser(Parser):
         if exit_code is not None:
             return exit_code
 
-        exit_code = self._parse_gsr()
-        if exit_code is not None:
-            return exit_code
-
-        if is_relaxation:
-            exit_code = self._parse_trajectory()  # pylint: disable=assignment-from-none
+        if not dry_run:
+            exit_code = self._parse_gsr()
             if exit_code is not None:
                 return exit_code
+
+            if is_relaxation:
+                exit_code = self._parse_trajectory()  # pylint: disable=assignment-from-none
+                if exit_code is not None:
+                    return exit_code
 
         return ExitCode(0)
 
@@ -74,13 +78,13 @@ class AbinitParser(Parser):
         # Did the run have ERRORS:
         if len(report.errors) > 0:
             for error in report.errors:
-                self.logger.error(error.message)
+                self.logger.error('\n' + error.message)
             return self.exit_codes.ERROR_OUTPUT_CONTAINS_ABORT
 
         # Did the run contain WARNINGS:
         if len(report.warnings) > 0:
             for warning in report.warnings:
-                self.logger.warning(warning.message)
+                self.logger.warning('\n' + warning.message)
 
         # Did the run complete
         if not report.run_completed:

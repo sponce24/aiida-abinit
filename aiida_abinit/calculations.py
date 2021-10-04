@@ -311,7 +311,7 @@ class AbinitCalculation(CalcJob):
         # set up the calc info so AiiDA knows what to do with everything
         calcinfo = datastructures.CalcInfo()
         calcinfo.codes_info = [codeinfo]
-        calcinfo.stdin_name =  self.metadata.options.input_filename
+        calcinfo.stdin_name = self.metadata.options.input_filename
         calcinfo.stdout_name = self.metadata.options.output_filename
         calcinfo.retrieve_list = retrieve_list
         calcinfo.remote_symlink_list = remote_symlink_list

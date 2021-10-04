@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """AiiDA-abinit output parser."""
+from os import path
+
 import abipy.abilab as abilab
 import netCDF4 as nc
 import numpy as np
@@ -63,17 +65,17 @@ class AbinitParser(Parser):
 
     def _parse_stdout(self):
         """Abinit stdout parser."""
-        # Output file - aiida.out
-        fname = f'{self.node.get_attribute("prefix")}.out'
-        # Absolute path of the folder in which files are stored
-        path = self.node.get_remote_workdir()
+        # HACK: Get the absolute path to the retrieved `PREFIX`o_HIST.nc file
+        with self.retrieved.open(self.node.get_attribute('prefix') + '.out', 'r') as handle:
+            filepath = handle.name
+            filename = path.split(filepath)[-1]
 
-        if fname not in self.retrieved.list_object_names():
+        if filename not in self.retrieved.list_object_names():
             return self.exit_codes.ERROR_MISSING_OUTPUT_FILES
 
         # Read the output log file for potential errors.
         parser = events.EventsParser()
-        report = parser.parse(path + '/' + fname)
+        report = parser.parse(filepath)
 
         # Did the run have ERRORS:
         if len(report.errors) > 0:
@@ -92,15 +94,15 @@ class AbinitParser(Parser):
 
     def _parse_gsr(self):
         """Abinit GSR parser."""
-        # Output GSR Abinit NetCDF file - Default name is aiidao_GSR.nc
-        fname = f'{self.node.get_attribute("prefix")}o_GSR.nc'
-        # Absolute path of the folder in which aiidao_GSR.nc is stored
-        path = self.node.get_remote_workdir()
+        # HACK: Get the absolute path to the retrieved `PREFIX`o_GSR.nc file
+        with self.retrieved.open(self.node.get_attribute('prefix') + 'o_GSR.nc', 'r') as handle:
+            filepath = handle.name
+            filename = path.split(filepath)[-1]
 
-        if fname not in self.retrieved.list_object_names():
+        if filename not in self.retrieved.list_object_names():
             return self.exit_codes.ERROR_MISSING_OUTPUT_FILES
 
-        with abilab.abiopen(path + '/' + fname) as gsr:
+        with abilab.abiopen(filepath) as gsr:
             gsr_data = {
                 'abinit_version': gsr.abinit_version,
                 'cart_stress_tensor': gsr.cart_stress_tensor.tolist(),
@@ -202,20 +204,20 @@ class AbinitParser(Parser):
             tensor[1, 0] = tensor[0, 1]
             return tensor
 
-        # Absolute path of the folder in which aiidao_GSR.nc is stored
-        path = self.node.get_remote_workdir()
-        # HIST Abinit NetCDF file - Default name is aiidao_HIST.nc
-        fname = f'{self.node.get_attribute("prefix")}o_HIST.nc'
+        # HACK: Get the absolute path to the retrieved `PREFIX`o_HIST.nc file
+        with self.retrieved.open(self.node.get_attribute('prefix') + 'o_HIST.nc', 'r') as handle:
+            filepath = handle.name
+            filename = path.split(filepath)[-1]
 
-        if fname not in self.retrieved.list_object_names():
+        if filename not in self.retrieved.list_object_names():
             return self.exit_codes.ERROR_MISSING_OUTPUT_FILES
 
-        with HistFile(path + '/' + fname) as hist_file:
+        with HistFile(filepath) as hist_file:
             structures = hist_file.structures
 
         output_structure = StructureData(pymatgen=structures[-1])
 
-        with nc.Dataset(path + '/' + fname, 'r') as data_set:  # pylint: disable=no-member
+        with nc.Dataset(filepath, 'r') as data_set:  # pylint: disable=no-member
             n_steps = data_set.dimensions['time'].size
             energy_ha = data_set.variables['etotal'][:].data  # Ha
             energy_kin_ha = data_set.variables['ekin'][:].data  # Ha

@@ -42,7 +42,7 @@
     "install_requires": [
         "aiida_core[atomic_tools]~=1.6.3,<=2.0.0",
         "aiida-pseudo~=0.6.1",
-        "abipy>=0.9.0",
+        "abipy>=0.8.0",
         "packaging",
         "psycopg2-binary~=2.8.3",
 	"pymatgen<=2022.0.11",

@@ -29,7 +29,6 @@ def example_dft(code, pseudo_family):
     kpoints = KpointsData()
     kpoints.set_cell_from_structure(structure)
     kpoints.set_kpoints_mesh([2, 2, 2])
-    # kpoints.set_kpoints_mesh_from_density(2.0)
 
     parameters_dict = {
         'code':
@@ -44,8 +43,6 @@ def example_dft(code, pseudo_family):
         Dict(
             dict={
                 'ecut': 8.0,  # Maximal kinetic energy cut-off, in Hartree
-                'nshiftk': 4,  # of the reciprocal space (that form a BCC lattice !)
-                'shiftk': [[0.5, 0.5, 0.5], [0.5, 0.0, 0.0], [0.0, 0.5, 0.0], [0.0, 0.0, 0.5]],
                 'nstep': 20,  # Maximal number of SCF cycles
                 'toldfe': 1.0e-6,  # Will stop when, twice in a row, the difference
                 # between two consecutive evaluations of total energy
@@ -58,7 +55,7 @@ def example_dft(code, pseudo_family):
                 'max_wallclock_seconds': 2 * 60,
                 'resources': {
                     'num_machines': 1,
-                    'num_mpiprocs_per_machine': 4,
+                    'num_mpiprocs_per_machine': 3,
                 }
             }
         }

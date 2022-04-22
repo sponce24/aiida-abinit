@@ -1,10 +1,10 @@
 ---
-description: "localhost-abinit"
-label: "localhost-abinit"
-hostname: "localhost-abinit"
+description: "localhost"
+label: "localhost"
+hostname: "localhost"
 transport: local
 scheduler: "direct"
-work_dir: "/home/sponce/program/aiida-abinit/tmp/.aiida_run"
+work_dir: "/home/YOUR_USERNAME/aiida-abinit/"
 mpirun_command: "mpirun -np {tot_num_mpiprocs}"
 mpiprocs_per_machine: "2"
 shebang: "#!/bin/bash"

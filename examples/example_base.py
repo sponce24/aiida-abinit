@@ -9,7 +9,7 @@ Usage: python ./example_base.py --code abinit-9.2.1-ab@localhost --pseudo_family
 import os
 
 import click
-import pymatgen as mg
+import pymatgen as pmg
 from aiida import cmdline
 from aiida.engine import run
 from aiida.orm import Float, Dict, Group, StructureData
@@ -22,7 +22,7 @@ def example_base(code, pseudo_family):
     print('Testing the AbinitBaseWorkChain single-point on Silicon')
 
     thisdir = os.path.dirname(os.path.realpath(__file__))
-    structure = StructureData(pymatgen=mg.core.Structure.from_file(os.path.join(thisdir, 'files', 'Si.cif')))
+    structure = StructureData(pymatgen=pmg.core.Structure.from_file(os.path.join(thisdir, 'files', 'Si.cif')))
     pseudo_family = Group.objects.get(label=pseudo_family)
     pseudos = pseudo_family.get_pseudos(structure=structure)
 
@@ -39,8 +39,6 @@ def example_base(code, pseudo_family):
             Dict(
                 dict={
                     'ecut': 8.0,  # Maximal kinetic energy cut-off, in Hartree
-                    'nshiftk': 4,  # of the reciprocal space (that form a BCC lattice !)
-                    'shiftk': [[0.5, 0.5, 0.5], [0.5, 0.0, 0.0], [0.0, 0.5, 0.0], [0.0, 0.0, 0.5]],
                     'nstep': 20,  # Maximal number of SCF cycles
                     'toldfe': 1.0e-6,  # Will stop when, twice in a row, the difference
                     # between two consecutive evaluations of total energy

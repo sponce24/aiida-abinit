@@ -53,5 +53,5 @@
     "name": "aiida-abinit",
     "python_requires": ">=3.7",
     "url": "https://github.com/sponce24/aiida-abinit",
-    "version": "0.2.0a1"
+    "version": "0.2.0a2"
 }

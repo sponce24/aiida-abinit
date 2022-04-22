@@ -21,9 +21,33 @@ class AbinitCalculation(CalcJob):
     """AiiDA calculation plugin wrapping the abinit executable."""
 
     _DEFAULT_PREFIX = 'aiida'
+    _DEFAULT_INPUT_EXTENSION = 'in'
+    _DEFAULT_OUTPUT_EXTENSION = 'out'
     _PSEUDO_SUBFOLDER = './pseudo/'
 
-    _BLOCKED_KEYWORDS = ['nshiftk', 'ngkpt', 'acell', 'angdeg', 'rprim', 'brvltt']
+    _BLOCKED_KEYWORDS = [
+        # Structure-related keywords set automatically from the `StructureData``
+        'acell',
+        'angdeg',
+        'natom',
+        'ntypat',
+        'rprim',
+        'rprimd',
+        'brvltt',
+        'typat',
+        'xcart',
+        'xred',
+        'znucl',
+        'natrd',
+        'xyzfile',
+        # K-point-related keywords set automatically from the `KpointsData`
+        'kpt',
+        'ngkpt',
+        'nkpath',
+        'nkpt',
+        'nshiftk',
+        'wtk'
+    ]
 
     @classmethod
     def define(cls, spec):
@@ -34,6 +58,12 @@ class AbinitCalculation(CalcJob):
         spec.input('metadata.options.prefix',
                    valid_type=str,
                    default=cls._DEFAULT_PREFIX)
+        spec.input('metadata.options.input_extension',
+                   valid_type=str,
+                   default=cls._DEFAULT_INPUT_EXTENSION)
+        spec.input('metadata.options.input_extension',
+                   valid_type=str,
+                   default=cls._DEFAULT_OUTPUT_EXTENSION)
         spec.input('metadata.options.withmpi',
                    valid_type=bool,
                    default=True)
@@ -59,9 +89,11 @@ class AbinitCalculation(CalcJob):
                              valid_type=(Psp8Data, JthXmlData),
                              help='The pseudopotentials.',
                              dynamic=True)
-
-        spec.inputs['metadata']['options']['parser_name'].default = 'abinit'
-        spec.inputs['metadata']['options']['resources'].default = {'num_machines': 1, 'num_mpiprocs_per_machine': 1}
+        options = spec.inputs['metadata']['options']
+        options['parser_name'].default = 'abinit'
+        options['resources'].default = {'num_machines': 1, 'num_mpiprocs_per_machine': 1}
+        options['input_filename'].default = f'{cls._DEFAULT_PREFIX}.{cls._DEFAULT_INPUT_EXTENSION}'
+        options['output_filename'].default = f'{cls._DEFAULT_PREFIX}.{cls._DEFAULT_OUTPUT_EXTENSION}'
 
         # Unrecoverable errors: file missing
         spec.exit_code(100, 'ERROR_MISSING_OUTPUT_FILES',
@@ -147,10 +179,12 @@ class AbinitCalculation(CalcJob):
         """
         local_copy_pseudo_list = []
 
-        # abipy has its own subclass of Pymatgen's `Structure`, so we use that
+        # `abipy`` has its own subclass of Pymatgen's `Structure`, so we use that
         pmg_structure = structure.get_pymatgen()
         abi_structure = AbiStructure.as_structure(pmg_structure)
-        abi_structure = abi_structure.abi_sanitize(primitive=True)
+        # NOTE: need to refine the `abi_sanitize` parameters
+        abi_structure = abi_structure.abi_sanitize(symprec=1e-3, angle_tolerance=5,
+            primitive=True, primitive_standard=False)
 
         for kind in structure.get_kind_names():
             pseudo = pseudos[kind]
@@ -166,10 +200,11 @@ class AbinitCalculation(CalcJob):
 
         input_parameters = parameters.get_dict()
 
-        # use abipy to write the input file
+        # Use `abipy`` to write the input file
         input_parameters = {**input_parameters, **pseudo_parameters}
 
-        # give abipy the HGH_TABLE only so it won't error, but don't actually print these to file
+        # `AbinitInput` requires a valid pseudo table / list of pseudos, so we give it the `HGH_TABLE`,
+        # which should always work. In the end, we do _not_ print these to the input file.
         abi_input = AbinitInput(
             structure=abi_structure,
             pseudos=HGH_TABLE,
@@ -190,31 +225,31 @@ class AbinitCalculation(CalcJob):
         return abi_input.to_string(with_pseudos=False), local_copy_pseudo_list
 
     def _generate_cmdline_params(self, settings: dict) -> ty.List[str]:
-        # input file has to be the first parameter
+        # The input file has to be the first parameter
         cmdline_params = [self.metadata.options.input_filename]
 
-        # if a max wallclock is set in the options but the timelimit hasn't been manually set, we set it
+        # If a max wallclock is set in the `options`, we also set the `--timelimit` param
         if 'max_wallclock_seconds' in self.metadata.options:
             max_wallclock_seconds = self.metadata.options.max_wallclock_seconds
             cmdline_params.extend(['--timelimit', seconds_to_timelimit(max_wallclock_seconds)])
 
-        # if a number of OMP threads is set in the options but the commandline flag hasn't been manually set, we set it
+        # If a number of OMP threads is set in the options, we set the `--omp-num-threads` param
         if 'num_omp_threads' in self.metadata.options.resources:
             omp_num_threads = self.metadata.options.resources['omp_num_threads']
             cmdline_params.extend(['--omp-num-threads', f'{omp_num_threads:d}'])
 
-        # enable verbose mode if requested in the settings and not already manually set
+        # Enable verbose mode if requested in the settings
         if settings.pop('VERBOSE', False):
             cmdline_params.append('--verbose')
-        # enable a dry run if requested in the settings and not already manually set
 
+        # Enable a dry run if requested in the settings
         # NOTE: don't pop here, we need to know about dry runs when generating the retrieve list
         if settings.get('DRY_RUN', False):
             cmdline_params.append('--dry-run')
 
         return cmdline_params
 
-    def _generate_retrieve_list(self, parameters: orm.Dict, settings: dict, ) -> list:
+    def _generate_retrieve_list(self, parameters: orm.Dict, settings: dict) -> list:
         """Generate the list of files to retrieve based on the type of calculation requested in the input parameters.
 
         :param parameters: input parameters
@@ -223,19 +258,19 @@ class AbinitCalculation(CalcJob):
         parameters = parameters.get_dict()
         prefix = self.metadata.options.prefix
 
-        # start with the files that should always be retrieved: stdout, .abo, and manually provided files
-        retrieve_list = [f'{prefix}{postfix}' for postfix in ['.out']]
+        # Start with the files that should always be retrieved: stdout, .abo, then add manually provided files
+        retrieve_list = [f'{prefix}.{postfix}' for postfix in [self._DEFAULT_OUTPUT_EXTENSION]]
         retrieve_list += settings.pop('ADDITIONAL_RETRIEVE_LIST', [])
 
         # NOTE: pop here, we don't need this setting anymore
         if not settings.pop('DRY_RUN', False):
-            # in all cases except for dry runs: o_GSR.nc
+            # In all cases except for dry runs: o_GSR.nc
             retrieve_list += [f'{prefix}{postfix}' for postfix in ['o_GSR.nc']]
-            # when moving ions: o_HIST.nc
+            # When moving ions: o_HIST.nc
             if parameters.get('ionmov', 0) > 0:
                 retrieve_list += [f'{prefix}{postfix}' for postfix in ['o_HIST.nc']]
 
-        # there may be duplicates from the ADDITIONAL_RETRIEVE_LIST setting, so clean up using set()
+        # There may be duplicates from the `ADDITIONAL_RETRIEVE_LIST` setting, so clean up using set()
         return list(set(retrieve_list))
 
     def prepare_for_submission(self, folder):
@@ -245,26 +280,22 @@ class AbinitCalculation(CalcJob):
             the calculation.
         :return: `aiida.common.datastructures.CalcInfo` instance
         """
-        # process the settings so that capitalization isn't an issue
+        # Process the `settings`` so that capitalization isn't an issue
         settings = uppercase_dict(self.inputs.settings.get_dict()) if 'settings' in self.inputs else {}
 
-        # validate the input parameters and pseudopotentials
+        # Validate the input parameters and pseudopotentials
         self._validate_parameters()
         self._validate_pseudos()
 
-        # create lists which specify files to copy and symlink
+        # Create lists which specify files to copy and symlink
         local_copy_list = []
         remote_copy_list = []
         remote_symlink_list = []
 
-        # create the subfolder which will contain the pseudopotential files
+        # Create the subfolder which will contain the pseudopotential files
         folder.get_subfolder(self._PSEUDO_SUBFOLDER, create=True)
 
-        # set the input and stdout filenames from the prefix
-        self.metadata.options.input_filename = f'{self.metadata.options.prefix}.in'
-        self.metadata.options.output_filename = f'{self.metadata.options.prefix}.out'
-
-        # generate the input file content and list of pseudopotential files to copy
+        # Generate the input file content and list of pseudopotential files to copy
         arguments = [
             self.inputs.parameters,
             self.inputs.pseudos,
@@ -273,14 +304,14 @@ class AbinitCalculation(CalcJob):
         ]
         input_filecontent, local_copy_pseudo_list = self._generate_inputdata(*arguments)
 
-        # merge the pseudopotential copy list with the overall copylist and write the input file
+        # Merge the pseudopotential copy list with the overall copy list then write the input file
         local_copy_list += local_copy_pseudo_list
         with io.open(folder.get_abs_path(self.metadata.options.input_filename), mode='w', encoding='utf-8') as stream:
             stream.write(input_filecontent)
 
-        # list the files to copy or symlink in the case of a restart
+        # List the files to copy or symlink in the case of a restart
         if 'parent_folder' in self.inputs:
-            # symlink by default if on the same computer, otherwise copy by default
+            # Symlink by default if on the same computer, otherwise copy by default
             same_computer = self.inputs.code.computer.uuid == self.inputs.parent_folder.computer.uuid
             if settings.pop('PARENT_FOLDER_SYMLINK', same_computer):
                 remote_symlink_list.append((
@@ -295,20 +326,20 @@ class AbinitCalculation(CalcJob):
                     './')
                 )
 
-        # generate the commandline parameters
+        # Generate the commandline parameters
         cmdline_params = self._generate_cmdline_params(settings)
 
-        # generate list of files to retrieve from wherever the calculation is run
+        # Generate list of files to retrieve from wherever the calculation is run
         retrieve_list = self._generate_retrieve_list(self.inputs.parameters, settings)
 
-        # set up the code info to pass to `CalcInfo`
+        # Set up the `CodeInfo` to pass to `CalcInfo`
         codeinfo = datastructures.CodeInfo()
         codeinfo.code_uuid = self.inputs.code.uuid
         codeinfo.cmdline_params = cmdline_params
         codeinfo.stdout_name = self.metadata.options.output_filename
         codeinfo.withmpi = self.inputs.metadata.options.withmpi
 
-        # set up the calc info so AiiDA knows what to do with everything
+        # Set up the `CalcInfo` so AiiDA knows what to do with everything
         calcinfo = datastructures.CalcInfo()
         calcinfo.codes_info = [codeinfo]
         calcinfo.stdin_name = self.metadata.options.input_filename

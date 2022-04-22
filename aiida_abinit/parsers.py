@@ -35,8 +35,12 @@ class AbinitParser(Parser):
         """Parse outputs, store results in database."""
         ionmov = self.node.inputs['parameters'].get_dict().get('ionmov', 0)
         optcell = self.node.inputs['parameters'].get_dict().get('optcell', 0)
-        dry_run = uppercase_dict(self.node.inputs['settings'].get_dict()).get('DRY_RUN', False)
+        if 'settings' in self.node.inputs:
+            dry_run = uppercase_dict(self.node.inputs['settings'].get_dict()).get('DRY_RUN', False)
+        else:
+            dry_run = False
 
+        # HACK: read documentation to refine this condition
         if ionmov == 0 and optcell == 0:
             is_relaxation = False
         else:
@@ -52,7 +56,7 @@ class AbinitParser(Parser):
             return exit_code
 
         if not dry_run:
-            exit_code = self._parse_gsr()
+            exit_code = self._parse_gsr(is_relaxation)
             if exit_code is not None:
                 return exit_code
 
@@ -65,7 +69,7 @@ class AbinitParser(Parser):
 
     def _parse_stdout(self):
         """Abinit stdout parser."""
-        # HACK: Get the absolute path to the retrieved `PREFIX`o_HIST.nc file
+        # HACK: Get the absolute path to the retrieved `PREFIX`.out file
         with self.retrieved.open(self.node.get_attribute('prefix') + '.out', 'r') as handle:
             filepath = handle.name
             filename = path.split(filepath)[-1]
@@ -77,22 +81,22 @@ class AbinitParser(Parser):
         parser = events.EventsParser()
         report = parser.parse(filepath)
 
-        # Did the run have ERRORS:
+        # Did the run have ERRORS?
         if len(report.errors) > 0:
             for error in report.errors:
                 self.logger.error('\n' + error.message)
             return self.exit_codes.ERROR_OUTPUT_CONTAINS_ABORT
 
-        # Did the run contain WARNINGS:
+        # Did the run contain WARNINGS?
         if len(report.warnings) > 0:
             for warning in report.warnings:
                 self.logger.warning('\n' + warning.message)
 
-        # Did the run complete
+        # Did the run complete?
         if not report.run_completed:
             return self.exit_codes.ERROR_OUTPUT_CONTAINS_ABORT
 
-    def _parse_gsr(self):
+    def _parse_gsr(self, is_relaxation):
         """Abinit GSR parser."""
         # HACK: Get the absolute path to the retrieved `PREFIX`o_GSR.nc file
         with self.retrieved.open(self.node.get_attribute('prefix') + 'o_GSR.nc', 'r') as handle:
@@ -165,28 +169,32 @@ class AbinitParser(Parser):
                 'pressure': float(gsr.pressure),
                 'pressure' + UNITS_SUFFIX: DEFAULT_STRESS_UNITS
             }
+            structure = StructureData(pymatgen=gsr.structure)
 
             try:
-                # will return an integer 0 if non-magnetic calculation is run; convert it to a float
+                # Will return an integer 0 if non-magnetic calculation is run; convert it to a float
                 total_magnetization = float(gsr.ebands.get_collinear_mag())
                 gsr_data['total_magnetization'] = total_magnetization
                 gsr_data['total_magnetization' + UNITS_SUFFIX] = DEFAULT_MAGNETIZATION_UNITS
-            except ValueError as valerr:
-                # get_collinear_mag will raise ValueError if it doesn't know what to do
-                if 'Cannot calculate collinear magnetization' in valerr.args[0]:
+            except ValueError as exc:
+                # `get_collinear_mag`` will raise ValueError if it doesn't know what to do
+                if 'Cannot calculate collinear magnetization' in exc.args[0]:
                     pass
                 else:
-                    raise valerr
+                    raise exc
 
             try:
                 bands_data = BandsData()
                 bands_data.set_kpoints(gsr.ebands.kpoints.get_cart_coords())
                 bands_data.set_bands(np.array(gsr.ebands.eigens), units=str(gsr.ebands.eigens.unit))
                 self.out('output_bands', bands_data)
+            # HACK: refine this exception catch
             except:  # pylint: disable=bare-except
                 pass
 
         self.out('output_parameters', Dict(dict=gsr_data))
+        if not is_relaxation:
+            self.out('output_structure', structure)
 
     def _parse_trajectory(self):
         """Abinit trajectory parser."""

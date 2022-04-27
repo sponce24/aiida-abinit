@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """AiiDA-abinit output parser."""
 from os import path
+from tempfile import TemporaryDirectory
 
 import abipy.abilab as abilab
 import netCDF4 as nc
@@ -51,31 +52,40 @@ class AbinitParser(Parser):
         except exceptions.NotExistent:
             return self.exit_codes.ERROR_NO_RETRIEVED_TEMPORARY_FOLDER
 
-        exit_code = self._parse_stdout()
-        if exit_code is not None:
-            return exit_code
+        with TemporaryDirectory() as dirpath:
+            self.copy_tree(dirpath)
 
-        if not dry_run:
-            exit_code = self._parse_gsr(is_relaxation)
+            prefix = self.node.get_attribute('prefix')
+            output_extension = self.node.get_attribute('output_extension')
+
+            stdout_filepath = path.join(dirpath, f'{prefix}.{output_extension}')
+            exit_code = self._parse_stdout(stdout_filepath)
             if exit_code is not None:
                 return exit_code
 
-            if is_relaxation:
-                exit_code = self._parse_trajectory()  # pylint: disable=assignment-from-none
+            if not dry_run:
+                gsr_filepath = path.join(dirpath, f'{prefix}o.GSR')
+                exit_code = self._parse_gsr(gsr_filepath, is_relaxation)
                 if exit_code is not None:
                     return exit_code
 
+                if is_relaxation:
+                    hist_filepath = path.join(dirpath, f'{prefix}o.HIST')
+                    exit_code = self._parse_trajectory(hist_filepath)  # pylint: disable=assignment-from-none
+                    if exit_code is not None:
+                        return exit_code
+
         return ExitCode(0)
 
-    def _parse_stdout(self):
+    def _parse_stdout(self, filepath):
         """Abinit stdout parser."""
         # HACK: Get the absolute path to the retrieved `PREFIX`.out file
-        with self.retrieved.open(self.node.get_attribute('prefix') + '.out', 'r') as handle:
-            filepath = handle.name
-            filename = path.split(filepath)[-1]
+        # with self.retrieved.open(self.node.get_attribute('prefix') + '.out', 'r') as handle:
+        #     filepath = handle.name
+        #     filename = path.split(filepath)[-1]
 
-        if filename not in self.retrieved.list_object_names():
-            return self.exit_codes.ERROR_MISSING_OUTPUT_FILES
+        # if filename not in self.retrieved.list_object_names():
+        #     return self.exit_codes.ERROR_MISSING_OUTPUT_FILES
 
         # Read the output log file for potential errors.
         parser = events.EventsParser()
@@ -96,15 +106,15 @@ class AbinitParser(Parser):
         if not report.run_completed:
             return self.exit_codes.ERROR_OUTPUT_CONTAINS_ABORT
 
-    def _parse_gsr(self, is_relaxation):
+    def _parse_gsr(self, filepath, is_relaxation):
         """Abinit GSR parser."""
         # HACK: Get the absolute path to the retrieved `PREFIX`o_GSR.nc file
-        with self.retrieved.open(self.node.get_attribute('prefix') + 'o_GSR.nc', 'r') as handle:
-            filepath = handle.name
-            filename = path.split(filepath)[-1]
+        # with self.retrieved.open(self.node.get_attribute('prefix') + 'o_GSR.nc', 'r') as handle:
+        #     filepath = handle.name
+        #     filename = path.split(filepath)[-1]
 
-        if filename not in self.retrieved.list_object_names():
-            return self.exit_codes.ERROR_MISSING_OUTPUT_FILES
+        # if filename not in self.retrieved.list_object_names():
+        #     return self.exit_codes.ERROR_MISSING_OUTPUT_FILES
 
         with abilab.abiopen(filepath) as gsr:
             gsr_data = {
@@ -112,10 +122,10 @@ class AbinitParser(Parser):
                 'cart_stress_tensor': gsr.cart_stress_tensor.tolist(),
                 'cart_stress_tensor' + UNITS_SUFFIX: DEFAULT_STRESS_UNITS,
                 'is_scf_run': bool(gsr.is_scf_run),
-                # 'cart_forces': gsr.cart_forces.tolist(),
-                # 'cart_forces' + units_suffix: DEFAULT_FORCE_UNITS,
-                'forces': gsr.cart_forces.tolist(),  # backwards compatibility
-                'forces' + UNITS_SUFFIX: DEFAULT_FORCE_UNITS,
+                'cart_forces': gsr.cart_forces.tolist(),
+                'cart_forces' + UNITS_SUFFIX: DEFAULT_FORCE_UNITS,
+                # 'forces': gsr.cart_forces.tolist(),  # backwards compatibility
+                # 'forces' + UNITS_SUFFIX: DEFAULT_FORCE_UNITS,
                 'energy': float(gsr.energy),
                 'energy' + UNITS_SUFFIX: DEFAULT_ENERGY_UNITS,
                 'e_localpsp': float(gsr.energy_terms.e_localpsp),
@@ -196,7 +206,7 @@ class AbinitParser(Parser):
         if not is_relaxation:
             self.out('output_structure', structure)
 
-    def _parse_trajectory(self):
+    def _parse_trajectory(self, filepath):
         """Abinit trajectory parser."""
 
         def _voigt_to_tensor(voigt):
@@ -213,12 +223,12 @@ class AbinitParser(Parser):
             return tensor
 
         # HACK: Get the absolute path to the retrieved `PREFIX`o_HIST.nc file
-        with self.retrieved.open(self.node.get_attribute('prefix') + 'o_HIST.nc', 'r') as handle:
-            filepath = handle.name
-            filename = path.split(filepath)[-1]
+        # with self.retrieved.open(self.node.get_attribute('prefix') + 'o_HIST.nc', 'r') as handle:
+        #     filepath = handle.name
+        #     filename = path.split(filepath)[-1]
 
-        if filename not in self.retrieved.list_object_names():
-            return self.exit_codes.ERROR_MISSING_OUTPUT_FILES
+        # if filename not in self.retrieved.list_object_names():
+        #     return self.exit_codes.ERROR_MISSING_OUTPUT_FILES
 
         with HistFile(filepath) as hist_file:
             structures = hist_file.structures

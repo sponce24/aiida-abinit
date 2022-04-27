@@ -61,7 +61,7 @@ class AbinitCalculation(CalcJob):
         spec.input('metadata.options.input_extension',
                    valid_type=str,
                    default=cls._DEFAULT_INPUT_EXTENSION)
-        spec.input('metadata.options.input_extension',
+        spec.input('metadata.options.output_extension',
                    valid_type=str,
                    default=cls._DEFAULT_OUTPUT_EXTENSION)
         spec.input('metadata.options.withmpi',

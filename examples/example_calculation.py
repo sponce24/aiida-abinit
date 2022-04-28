@@ -44,7 +44,7 @@ def example_dft(code, pseudo_family):
             dict={
                 'ecut': 8.0,  # Maximal kinetic energy cut-off, in Hartree
                 'nstep': 20,  # Maximal number of SCF cycles
-                'toldfe': 1.0e-6,  # Will stop when, twice in a row, the difference
+                'toldfe': 1.0e-6  # Will stop when, twice in a row, the difference
                 # between two consecutive evaluations of total energy
                 # differ by less than toldfe (in Hartree)
             }

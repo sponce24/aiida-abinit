@@ -23,8 +23,8 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
         spec.input('kpoints',
                    valid_type=orm.KpointsData,
                    required=False,
-                   help='An explicit k-points mesh (list not currently supported). Either this or `kpoints_distance` '
-                        'has to be provided.')
+                   help='An explicit k-points mesh or list. Either this or `kpoints_distance` '
+                        'must be provided.')
         spec.input('kpoints_distance',
                    valid_type=orm.Float,
                    required=False,
@@ -88,8 +88,9 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
         the case of the latter, the `KpointsData` will be constructed for the input `StructureData` using the
         `create_kpoints_from_distance` calculation function.
         """
-        if all([key not in self.inputs for key in ['kpoints', 'kpoints_distance']]):
-            return self.exit_codes.ERROR_INVALID_INPUT_KPOINTS # pylint: disable=no-member
+        for key in ['kpoints', 'kpoints_distance']:
+            if key in self.inputs:
+                return self.exit_codes.ERROR_INVALID_INPUT_KPOINTS # pylint: disable=no-member
 
         try:
             kpoints = self.inputs.kpoints
@@ -140,6 +141,7 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
             self.ctx.inputs.parameters['restartxf'] = -2
             self.ctx.inputs.parent_folder = self.ctx.restart_calc.outputs.remote_folder
         else:
+            # Explicitly set that this is not a restart; makes querying easier
             self.ctx.inputs.parameters['restartxf'] = 0
 
     def report_error_handled(self, calculation, action):

@@ -123,8 +123,10 @@ class AbinitCalculation(CalcJob):
         # Significant errors but calculation can be used to restart
         spec.exit_code(400, 'ERROR_OUT_OF_WALLTIME',
                        message='The calculation stopped prematurely because it ran out of walltime.')
-        spec.exit_code(500, 'ERROR_GEOMETRY_CONVERGENCE_NOT_REACHED',
-                       message='The ionic minimization cycle did not converge for the given thresholds.')
+        spec.exit_code(500, 'ERROR_SCF_CONVERGENCE_NOT_REACHED',
+                       message='The SCF minimization cycle did not converge.')
+        spec.exit_code(501, 'ERROR_GEOMETRY_CONVERGENCE_NOT_REACHED',
+                       message='The ionic minimization cycle did not converge.')
 
         # Outputs
         spec.output('output_parameters',

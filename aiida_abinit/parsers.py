@@ -2,6 +2,7 @@
 """AiiDA-abinit output parser."""
 from os import path
 from tempfile import TemporaryDirectory
+import logging
 
 from abipy.dynamics.hist import HistFile
 from abipy.flowtk import events
@@ -87,6 +88,15 @@ class AbinitParser(Parser):
 
         return ExitCode(0)
 
+    def _report_message(self, level, message):
+        if not isinstance(level, int):
+            level = getattr(logging, level.upper(), None)
+        if '\n' in message:
+            message_lines = message.strip().split('\n')
+            message_lines = [f'\t{line}' for line in message_lines]
+            message = '\n' + '\n'.join(message_lines)
+        self.logger.log(level, '%s', message)
+
     def _parse_stdout(self, filepath, error_on_warning=False, report_comments=True):
         """Abinit stdout parser."""
         # Read the output log file for potential errors.
@@ -99,39 +109,34 @@ class AbinitParser(Parser):
         # Handle `ERROR`s
         if len(report.errors) > 0:
             for error in report.errors:
-                if '\n' in error.message:
-                    message_lines = error.message.strip().split('\n')
-                    message_lines = [f'\t{line}' for line in message_lines]
-                    message = '\n' + '\n'.join(message_lines)
-                else:
-                    message = error.message
-                self.logger.error(message)
+                self._report_message('ERROR', error.message)
             return self.exit_codes.ERROR_OUTPUT_CONTAINS_ERRORS
 
         # Handle `WARNING`s
         if len(report.warnings) > 0:
             for warning in report.warnings:
-                if '\n' in warning.message:
-                    message_lines = warning.message.strip().split('\n')
-                    message_lines = [f'\t{line}' for line in message_lines]
-                    message = '\n' + '\n'.join(message_lines)
-                else:
-                    message = warning.message
-                self.logger.warning(message)
+                self._report_message('WARNING', warning.message)
+            # Need to figure out how to handle the ordering of errors.
+            # In theory, this is restartable, but it can occur alongside out
+            # of walltime, in which case it probably _isn't_ restartable.
+            # for warning in report.warnings:
+            #     if ('nstep' in warning.message and
+            #         'was not enough SCF cycles to converge.' in warning.message):
+            #         return self.exit_codes.ERROR_SCF_CONVERGENCE_NOT_REACHED
             if error_on_warning:
+                # This can be quite harsh; inefficient k-point parallelization can cause
+                # a non-zero exit in this case.
                 return self.exit_codes.ERROR_OUTPUT_CONTAINS_WARNINGS
 
         # Handle `COMMENT`s
-        if report_comments and len(report.comments) > 0:
-            self.logger.setLevel('INFO')
+        if len(report.comments) > 0:
+            if report_comments:
+                self.logger.setLevel('INFO')
+                for comment in report.comments:
+                    self._report_message('INFO', comment.message)
             for comment in report.comments:
-                if '\n' in comment.message:
-                    message_lines = comment.message.strip().split('\n')
-                    message_lines = [f'\t{line}' for line in message_lines]
-                    message = '\n' + '\n'.join(message_lines)
-                else:
-                    message = comment.message
-                self.logger.info(message)
+                if ('Approaching time limit' in comment.message and 'Will exit istep loop' in comment.message):
+                    return self.exit_codes.ERROR_OUT_OF_WALLTIME
 
         # Did the run complete?
         if not report.run_completed:

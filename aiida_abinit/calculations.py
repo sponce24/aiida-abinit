@@ -70,7 +70,7 @@ class AbinitCalculation(CalcJob):
 
         spec.input('structure',
                    valid_type=orm.StructureData,
-                   help='The main input structure.')
+                   help='The input structure.')
         spec.input('kpoints',
                    valid_type=orm.KpointsData,
                    help='The k-point mesh or path')

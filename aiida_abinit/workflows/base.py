@@ -165,9 +165,9 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
             self.ctx.inputs.structure = calculation.outputs.output_structure
         except exceptions.NotExistent:
             self.ctx.restart_calc = calculation
-            self.report_error_handled(calculation, 'simply restart from the last calculation')
+            self.report_error_handled(calculation, 'restart from the last calculation')
         else:
             self.ctx.restart_calc = None
-            self.report_error_handled(calculation, 'out of walltime: structure changed so restarting from scratch')
+            self.report_error_handled(calculation, 'out of walltime: structure changed, so restarting from scratch')
 
         return ProcessHandlerReport(True)

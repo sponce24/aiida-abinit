@@ -144,9 +144,17 @@ class AbinitParser(Parser):
 
     def _parse_gsr(self, filepath, is_relaxation):
         """Abinit GSR parser."""
+        # abipy.electrons.gsr.GsrFile has a method `from_binary_string`;
+        # could try to use this instead of copying the files
         with abilab.abiopen(filepath) as gsr:
             gsr_data = {
                 'abinit_version': gsr.abinit_version,
+                'nband': gsr.nband,
+                'nelect': gsr.nelect,
+                'nkpt': gsr.nkpt,
+                'nspden': gsr.nspden,
+                'nspinor': gsr.nspinor,
+                'nsppol': gsr.nsppol,
                 'cart_stress_tensor': gsr.cart_stress_tensor.tolist(),
                 'cart_stress_tensor' + UNITS_SUFFIX: DEFAULT_STRESS_UNITS,
                 'is_scf_run': bool(gsr.is_scf_run),

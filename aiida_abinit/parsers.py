@@ -3,19 +3,17 @@
 from os import path
 from tempfile import TemporaryDirectory
 
-import abipy.abilab as abilab
+from abipy.dynamics.hist import HistFile
+from abipy.flowtk import events
+from abipy import abilab
 import netCDF4 as nc
 import numpy as np
 from pymatgen.core import units
-from abipy.dynamics.hist import HistFile
-from abipy.flowtk import events
 
-from aiida.common import exceptions
+from aiida.common.exceptions import NotExistent
 from aiida.engine import ExitCode
 from aiida.orm import BandsData, Dict, StructureData, TrajectoryData
 from aiida.parsers.parser import Parser
-
-from aiida_abinit.utils import uppercase_dict
 
 UNITS_SUFFIX = '_units'
 DEFAULT_CHARGE_UNITS = 'e'
@@ -34,88 +32,113 @@ class AbinitParser(Parser):
 
     def parse(self, **kwargs):
         """Parse outputs, store results in database."""
-        ionmov = self.node.inputs['parameters'].get_dict().get('ionmov', 0)
-        optcell = self.node.inputs['parameters'].get_dict().get('optcell', 0)
-        if 'settings' in self.node.inputs:
-            dry_run = uppercase_dict(self.node.inputs['settings'].get_dict()).get('DRY_RUN', False)
-        else:
-            dry_run = False
+        try:
+            settings = self.node.inputs.settings.get_dict()
+        except NotExistent:
+            settings = {}
 
-        # HACK: read documentation to refine this condition
-        if ionmov == 0 and optcell == 0:
-            is_relaxation = False
+        # Look for optional settings input node and potential 'parser_options' dictionary within it
+        parser_options = settings.get('parser_options', None)
+        if parser_options is not None:
+            error_on_warning = parser_options.get(error_on_warning, False)
+            report_comments = parser_options.get(report_comments, True)
         else:
-            is_relaxation = True
+            error_on_warning = False
+            report_comments = True
 
         try:
-            _ = self.retrieved
-        except exceptions.NotExistent:
-            return self.exit_codes.ERROR_NO_RETRIEVED_TEMPORARY_FOLDER
+            retrieved = self.retrieved
+        except NotExistent:
+            return self.exit_codes.ERROR_NO_RETRIEVED_FOLDER
 
+        parameters = self.node.inputs.parameters.get_dict()
+        ionmov = parameters.get('ionmov', 0)
+        optcell = parameters.get('optcell', 0)
+        is_relaxation = ionmov != 0 or optcell != 0
+
+        prefix = self.node.get_attribute('prefix')
+        retrieve_list = self.node.get_attribute('retrieve_list')
+        output_filename = self.node.get_attribute('output_filename')
         with TemporaryDirectory() as dirpath:
-            self.copy_tree(dirpath)
+            retrieved.copy_tree(dirpath)
 
-            prefix = self.node.get_attribute('prefix')
-            output_extension = self.node.get_attribute('output_extension')
-
-            stdout_filepath = path.join(dirpath, f'{prefix}.{output_extension}')
-            exit_code = self._parse_stdout(stdout_filepath)
-            if exit_code is not None:
-                return exit_code
-
-            if not dry_run:
-                gsr_filepath = path.join(dirpath, f'{prefix}o.GSR')
-                exit_code = self._parse_gsr(gsr_filepath, is_relaxation)
+            if output_filename in retrieve_list:
+                stdout_filepath = path.join(dirpath, output_filename)
+                exit_code = self._parse_stdout(
+                    stdout_filepath, error_on_warning=error_on_warning, report_comments=report_comments
+                )
                 if exit_code is not None:
                     return exit_code
+            else:
+                return self.exit_codes.ERROR_OUTPUT_MISSING
 
+            if f'{prefix}o_GSR.nc' in retrieve_list:
+                gsr_filepath = path.join(dirpath, f'{prefix}o_GSR.nc')
+                self._parse_gsr(gsr_filepath, is_relaxation)
+            else:
+                return self.exit_codes.ERROR_MISSING_GSR_OUTPUT_FILE
+
+            if f'{prefix}o_HIST.nc' in retrieve_list:
+                hist_filepath = path.join(dirpath, f'{prefix}o_HIST.nc')
+                self._parse_trajectory(hist_filepath)
+            else:
                 if is_relaxation:
-                    hist_filepath = path.join(dirpath, f'{prefix}o.HIST')
-                    exit_code = self._parse_trajectory(hist_filepath)  # pylint: disable=assignment-from-none
-                    if exit_code is not None:
-                        return exit_code
+                    return self.exit_codes.ERROR_MISSING_HIST_OUTPUT_FILE
 
         return ExitCode(0)
 
-    def _parse_stdout(self, filepath):
+    def _parse_stdout(self, filepath, error_on_warning=False, report_comments=True):
         """Abinit stdout parser."""
-        # HACK: Get the absolute path to the retrieved `PREFIX`.out file
-        # with self.retrieved.open(self.node.get_attribute('prefix') + '.out', 'r') as handle:
-        #     filepath = handle.name
-        #     filename = path.split(filepath)[-1]
-
-        # if filename not in self.retrieved.list_object_names():
-        #     return self.exit_codes.ERROR_MISSING_OUTPUT_FILES
-
         # Read the output log file for potential errors.
         parser = events.EventsParser()
-        report = parser.parse(filepath)
+        try:
+            report = parser.parse(filepath)
+        except:  # pylint: disable=bare-except
+            return self.exit_codes.ERROR_OUTPUT_PARSE
 
-        # Did the run have ERRORS?
+        # Handle `ERROR`s
         if len(report.errors) > 0:
             for error in report.errors:
-                self.logger.error('\n' + error.message)
-            return self.exit_codes.ERROR_OUTPUT_CONTAINS_ABORT
+                if '\n' in error.message:
+                    message_lines = error.message.strip().split('\n')
+                    message_lines = [f'\t{line}' for line in message_lines]
+                    message = '\n' + '\n'.join(message_lines)
+                else:
+                    message = error.message
+                self.logger.error(message)
+            return self.exit_codes.ERROR_OUTPUT_CONTAINS_ERRORS
 
-        # Did the run contain WARNINGS?
+        # Handle `WARNING`s
         if len(report.warnings) > 0:
             for warning in report.warnings:
-                self.logger.warning('\n' + warning.message)
+                if '\n' in warning.message:
+                    message_lines = warning.message.strip().split('\n')
+                    message_lines = [f'\t{line}' for line in message_lines]
+                    message = '\n' + '\n'.join(message_lines)
+                else:
+                    message = warning.message
+                self.logger.warning(message)
+            if error_on_warning:
+                return self.exit_codes.ERROR_OUTPUT_CONTAINS_WARNINGS
+
+        # Handle `COMMENT`s
+        if report_comments and len(report.comments) > 0:
+            self.logger.setLevel('INFO')
+            for comment in report.comments:
+                if '\n' in comment.message:
+                    message_lines = comment.message.strip().split('\n')
+                    message_lines = [f'\t{line}' for line in message_lines]
+                    message = '\n' + '\n'.join(message_lines)
+                else:
+                    message = comment.message
+                self.logger.info(message)
 
         # Did the run complete?
         if not report.run_completed:
-            return self.exit_codes.ERROR_OUTPUT_CONTAINS_ABORT
+            return self.exit_codes.ERROR_RUN_NOT_COMPLETED
 
     def _parse_gsr(self, filepath, is_relaxation):
         """Abinit GSR parser."""
-        # HACK: Get the absolute path to the retrieved `PREFIX`o_GSR.nc file
-        # with self.retrieved.open(self.node.get_attribute('prefix') + 'o_GSR.nc', 'r') as handle:
-        #     filepath = handle.name
-        #     filename = path.split(filepath)[-1]
-
-        # if filename not in self.retrieved.list_object_names():
-        #     return self.exit_codes.ERROR_MISSING_OUTPUT_FILES
-
         with abilab.abiopen(filepath) as gsr:
             gsr_data = {
                 'abinit_version': gsr.abinit_version,
@@ -221,14 +244,6 @@ class AbinitParser(Parser):
             tensor[2, 0] = tensor[0, 2]
             tensor[1, 0] = tensor[0, 1]
             return tensor
-
-        # HACK: Get the absolute path to the retrieved `PREFIX`o_HIST.nc file
-        # with self.retrieved.open(self.node.get_attribute('prefix') + 'o_HIST.nc', 'r') as handle:
-        #     filepath = handle.name
-        #     filename = path.split(filepath)[-1]
-
-        # if filename not in self.retrieved.list_object_names():
-        #     return self.exit_codes.ERROR_MISSING_OUTPUT_FILES
 
         with HistFile(filepath) as hist_file:
             structures = hist_file.structures

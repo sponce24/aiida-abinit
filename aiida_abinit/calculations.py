@@ -61,7 +61,7 @@ class AbinitCalculation(CalcJob):
         spec.input('metadata.options.input_extension',
                    valid_type=str,
                    default=cls._DEFAULT_INPUT_EXTENSION)
-        spec.input('metadata.options.input_extension',
+        spec.input('metadata.options.output_extension',
                    valid_type=str,
                    default=cls._DEFAULT_OUTPUT_EXTENSION)
         spec.input('metadata.options.withmpi',
@@ -70,7 +70,7 @@ class AbinitCalculation(CalcJob):
 
         spec.input('structure',
                    valid_type=orm.StructureData,
-                   help='The main input structure.')
+                   help='The input structure.')
         spec.input('kpoints',
                    valid_type=orm.KpointsData,
                    help='The k-point mesh or path')
@@ -98,29 +98,35 @@ class AbinitCalculation(CalcJob):
         # Unrecoverable errors: file missing
         spec.exit_code(100, 'ERROR_MISSING_OUTPUT_FILES',
                        message='Calculation did not produce all expected output files.')
+        spec.exit_code(101, 'ERROR_MISSING_GSR_OUTPUT_FILE',
+                       message='Calculation did not produce the expected `[prefix]o_GSR.nc` output file.')
+        spec.exit_code(102, 'ERROR_MISSING_HIST_OUTPUT_FILE',
+                       message='Calculation did not produce the expected `[prefix]o_HIST.nc` output file.')
         # Unrecoverable errors: resources like the retrieved folder or its expected contents are missing.
         spec.exit_code(200, 'ERROR_NO_RETRIEVED_FOLDER',
                        message='The retrieved folder data node could not be accessed.')
         spec.exit_code(210, 'ERROR_OUTPUT_MISSING',
-                       message='The retrieved folder did not contain the required output file.')
+                       message='The retrieved folder did not contain the `stdout` output file.')
         # Unrecoverable errors: required retrieved files could not be read, parsed or are otherwise incomplete.
         spec.exit_code(301, 'ERROR_OUTPUT_READ',
-                       message='The output file could not be read.')
+                       message='The `stdout` output file could not be read.')
         spec.exit_code(302, 'ERROR_OUTPUT_PARSE',
-                       message='The output file could not be parsed.')
-        spec.exit_code(303, 'ERROR_OUTPUT_INCOMPLETE',
-                       message='The output file was incomplete.')
-        spec.exit_code(304, 'ERROR_OUTPUT_CONTAINS_ABORT',
-                       message='The output file contains the word "ABORT"')
+                       message='The `stdout` output file could not be parsed.')
+        spec.exit_code(303, 'ERROR_RUN_NOT_COMPLETED',
+                       message='The `abipy` `EventsParser` reports that the runw as not completed.')
+        spec.exit_code(304, 'ERROR_OUTPUT_CONTAINS_ERRORS',
+                       message='The output file contains one or more error messages.')
+        spec.exit_code(305, 'ERROR_OUTPUT_CONTAINS_WARNINGS',
+                       message='The output file contains one or more warning messages.')
         spec.exit_code(312, 'ERROR_STRUCTURE_PARSE',
                        message='The output structure could not be parsed.')
-        spec.exit_code(350, 'ERROR_UNEXPECTED_PARSER_EXCEPTION',
-                       message='The parser raised an unexpected exception.')
         # Significant errors but calculation can be used to restart
         spec.exit_code(400, 'ERROR_OUT_OF_WALLTIME',
                        message='The calculation stopped prematurely because it ran out of walltime.')
-        spec.exit_code(500, 'ERROR_GEOMETRY_CONVERGENCE_NOT_REACHED',
-                       message='The ionic minimization cycle did not converge for the given thresholds.')
+        spec.exit_code(500, 'ERROR_SCF_CONVERGENCE_NOT_REACHED',
+                       message='The SCF minimization cycle did not converge.')
+        spec.exit_code(501, 'ERROR_GEOMETRY_CONVERGENCE_NOT_REACHED',
+                       message='The ionic minimization cycle did not converge.')
 
         # Outputs
         spec.output('output_parameters',
@@ -159,9 +165,11 @@ class AbinitCalculation(CalcJob):
         """
         kinds = [kind.name for kind in self.inputs.structure.kinds]
         if set(kinds) != set(self.inputs.pseudos.keys()):
+            pseudos_str = ', '.join(list(self.inputs.pseudos.keys()))
+            kinds_str = ', '.join(list(kinds))
             raise exceptions.InputValidationError(
                 'Mismatch between the defined pseudos and the list of kinds of the structure.\n'
-                'Pseudos: {};\nKinds:{}'.format(', '.join(list(self.inputs.pseudos.keys())), ', '.join(list(kinds)))
+                f'Pseudos: {pseudos_str};\nKinds:{kinds_str}'
             )
 
     def _generate_inputdata(self,

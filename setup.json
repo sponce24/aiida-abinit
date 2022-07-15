@@ -7,7 +7,7 @@
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
-        "Development Status :: 3 - Alpha"
+        "Development Status :: 4 - Beta"
     ],
     "description": "An AiiDA plugin for ABINIT.",
     "entry_points": {
@@ -53,5 +53,5 @@
     "name": "aiida-abinit",
     "python_requires": ">=3.7",
     "url": "https://github.com/sponce24/aiida-abinit",
-    "version": "0.2.0a2"
+    "version": "0.3.0"
 }

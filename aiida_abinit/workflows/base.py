@@ -53,12 +53,14 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
 
         spec.exit_code(201, 'ERROR_INVALID_INPUT_PSEUDO_POTENTIALS',
             message='`pseudos` could not be used to get the necessary pseudos.')
-        spec.exit_code(202, 'ERROR_INVALID_INPUT_KPOINTS',
-            message='Neither the `kpoints` nor the `kpoints_distance` input was specified.')
-        spec.exit_code(203, 'ERROR_INVALID_INPUT_RESOURCES',
+        spec.exit_code(202, 'ERROR_MISSING_INPUT_KPOINTS',
+            message='Neither the `kpoints` nor the `kpoints_distance` input was specified (one required).')
+        spec.exit_code(203, 'ERROR_REDUNDANT_INPUT_KPOINTS',
+            message='Both the `kpoints` and the `kpoints_distance` inputs were specified but they are exclusive.')
+        spec.exit_code(204, 'ERROR_INVALID_INPUT_KPOINTS',
+            message='Either the `kpoints` or `kpoints_distance` input is invalid.')
+        spec.exit_code(205, 'ERROR_INVALID_INPUT_RESOURCES',
             message='Neither the `options` nor `automatic_parallelization` input was specified.')
-        spec.exit_code(204, 'ERROR_INVALID_INPUT_RESOURCES_UNDERSPECIFIED',
-            message='The `metadata.options` did not specify both `resources.num_machines` and `max_wallclock_seconds`.')
 
     def setup(self):
         """Call the `setup` of the `BaseRestartWorkChain` and then create the inputs dictionary in `self.ctx.inputs`.
@@ -88,19 +90,24 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
         the case of the latter, the `KpointsData` will be constructed for the input `StructureData` using the
         `create_kpoints_from_distance` calculation function.
         """
-        for key in ['kpoints', 'kpoints_distance']:
-            if key in self.inputs:
-                return self.exit_codes.ERROR_INVALID_INPUT_KPOINTS # pylint: disable=no-member
+        if 'kpoints' in self.inputs and 'kpoints_distance' in self.inputs:
+            return self.exit_codes.ERROR_REDUNDANT_INPUT_KPOINTS
 
-        try:
+        if 'kpoints' not in self.inputs and 'kpoints_distance' not in self.inputs:
+            return self.exit_codes.ERROR_MISSING_INPUT_KPOINTS
+
+        if 'kpoints' in self.inputs:
             kpoints = self.inputs.kpoints
-        except AttributeError:
-            inputs = {
+        else:
+            kpoints_distance = self.inputs.kpoints_distance
+            if kpoints_distance <= 0.0:
+                return self.exit_codes.ERROR_INVALID_INPUT_KPOINTS
+            kpoints_distance_inputs = {
                 'structure': self.inputs.abinit.structure,
-                'distance': self.inputs.kpoints_distance,
+                'distance': kpoints_distance,
                 'metadata': {'call_link_label': 'create_kpoints_from_distance'}
             }
-            kpoints = create_kpoints_from_distance(**inputs)  # pylint: disable=unexpected-keyword-arg
+            kpoints = create_kpoints_from_distance(**kpoints_distance_inputs)  # pylint: disable=unexpected-keyword-arg
 
         self.ctx.inputs.kpoints = kpoints
 
@@ -117,18 +124,6 @@ class AbinitBaseWorkChain(BaseRestartWorkChain):
         except ValueError as exception:
             self.report(f'{exception}')
             return self.exit_codes.ERROR_INVALID_INPUT_PSEUDO_POTENTIALS  # pylint: disable=no-member
-
-    def validate_resources(self):
-        """Validate the inputs related to the resources.
-
-        `metadata.options` should at least contain the options `resources` and `max_wallclock_seconds`,
-        where `resources` should define the `num_machines`.
-        """
-        num_machines = self.ctx.inputs.metadata.options.get('resources', {}).get('num_machines', None)
-        max_wallclock_seconds = self.ctx.inputs.metadata.options.get('max_wallclock_seconds', None)
-
-        if num_machines is None or max_wallclock_seconds is None:
-            return self.exit_codes.ERROR_INVALID_INPUT_RESOURCES_UNDERSPECIFIED  # pylint: disable=no-member
 
     def prepare_process(self):
         """Prepare the inputs for the next calculation.

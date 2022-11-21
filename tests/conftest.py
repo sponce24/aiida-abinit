@@ -6,6 +6,7 @@ import io
 import os
 import shutil
 import tempfile
+import pathlib
 
 import pytest
 
@@ -124,13 +125,14 @@ def pseudo_dojo(aiida_profile, generate_psp8_data):
     stringency = 'standard'
 
     with tempfile.TemporaryDirectory() as dirpath:
+        dirpath = pathlib.Path(dirpath)
         for values in elements.values():
 
             element = values['symbol']
             psp8 = generate_psp8_data(element)
-            filename = os.path.join(dirpath, f'{element}.psp8')
+            filepath = dirpath / f'{element}.psp8'
 
-            with open(filename, 'w+b') as handle:
+            with open(filepath, 'w+b') as handle:
                 with psp8.open(mode='rb') as source:
                     handle.write(source.read())
                     handle.flush()
@@ -290,7 +292,7 @@ def generate_psp8_data():
         from aiida_pseudo.data.pseudo import Psp8Data
         from aiida.common.constants import elements
         try:
-            atomic_number = [number for number in elements if elements[number]['symbol'] == element]
+            atomic_number = [num for num, el in elements.items() if el['symbol'] == element]
             atomic_number = float(atomic_number[0])
         except IndexError as error:
             raise ValueError(f'Could not associate an atomic number to {element}.') from error
@@ -326,7 +328,7 @@ def generate_structure():
             structure.append_atom(position=[-29.3865565, 9.51707929, -4.02515904], symbols='H', name='H')
             structure.append_atom(position=[1.04074437, -1.64320127, -1.27035021], symbols='O', name='O')
         else:
-            raise KeyError('Unknown structure_id=\'{}\''.format(structure_id))
+            raise KeyError(f'Unknown structure_id=\'{structure_id}\'')
         return structure
 
     return _generate_structure

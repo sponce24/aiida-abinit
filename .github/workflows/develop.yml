@@ -18,13 +18,7 @@ jobs:
 
         services:
             postgres:
-                image: postgres:10
-                env:
-                    POSTGRES_DB: test_${{ matrix.backend }}
-                    POSTGRES_PASSWORD: ''
-                    POSTGRES_HOST_AUTH_METHOD: trust
-                ports:
-                -    5432:5432
+                image: postgres:12
             rabbitmq:
                 image: rabbitmq:latest
                 ports:
@@ -46,11 +40,6 @@ jobs:
             uses: actions/setup-python@v2
             with:
                 python-version: ${{ matrix.python-version }}
-
-        -   name: Install system dependencies
-            run: |
-                sudo apt update
-                sudo apt install postgresql-12
 
         -   name: Install python dependencies
             continue-on-error: true

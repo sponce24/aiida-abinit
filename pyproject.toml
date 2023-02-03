@@ -1,6 +1,88 @@
 [build-system]
-requires = ['setuptools>=40.8.0', 'wheel', 'reentry~=1.3', 'fastentrypoints~=0.12']
-build-backend = 'setuptools.build_meta:__legacy__'
+requires = ['flit_core >=3.4,<4']
+build-backend = 'flit_core.buildapi'
+
+[project]
+name = 'aiida-abinit'
+dynamic = ['description', 'version']
+authors = [{name = 'Samuel Ponce', email = 'samuel.pon@gmail.com'}]
+readme = 'README.md'
+license = {file = 'LICENSE.txt'}
+classifiers = [
+    'Development Status :: 4 - Beta',
+    'Framework :: AiiDA',
+    'License :: OSI Approved :: MIT License',
+    'Operating System :: POSIX :: Linux',
+    'Operating System :: MacOS :: MacOS X',
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
+]
+keywords = ['aiida', 'abinit']
+requires-python = '>=3.8'
+dependencies = [
+    'aiida_core[atomic_tools]~=1.6.3,<3.0.0',
+    'aiida-pseudo~=0.6.1',
+    'abipy>=0.8.0',
+    'packaging',
+    'psycopg2-binary~=2.8.3',
+    'pymatgen>=2022.1.20',
+    'numpy',
+    'importlib_resources'
+]
+
+[project.urls]
+Home = 'https://github.com/sponce24/aiida-abinit'
+Source = 'https://github.com/sponce24/aiida-abinit'
+
+[project.optional-dependencies]
+docs = [
+    'sphinx',
+    'docutils',
+    'sphinx-copybutton~=0.3.0',
+    'sphinx-book-theme~=0.1.0',
+    'sphinx-click~=2.7.1'
+]
+pre-commit = [
+    'pre-commit~=2.2',
+    'pylint==2.6.0'
+]
+tests = [
+    'pgtest~=1.3',
+    'pytest~=6.0',
+    'pytest-regressions~=1.0'
+]
+
+[project.entry-points.'aiida.calculations']
+'abinit' = 'aiida_abinit.calculations:AbinitCalculation'
+
+[project.entry-points.'aiida.parsers']
+'abinit' = 'aiida_abinit.parsers:AbinitParser'
+
+[project.entry-points.'aiida.workflows']
+'abinit.base' = 'aiida_abinit.workflows.base:AbinitBaseWorkChain'
+
+[tool.flit.module]
+name = 'aiida_abinit'
+
+[tool.flit.sdist]
+exclude = [
+    '.github/',
+    'docs/',
+    'tests/',
+]
+
+[tool.flynt]
+line-length = 120
+fail-on-change = true
+
+[tool.pydocstyle]
+ignore = [
+    'D104',
+    'D202',
+    'D203',
+    'D213'
+]
 
 [tool.pylint.format]
 max-line-length = 120
@@ -37,26 +119,36 @@ good-names = [
 ]
 
 [tool.pytest.ini_options]
-minversion = '6.0'
-testpaths = [
-    'tests',
-]
 filterwarnings = [
+    'ignore:Creating AiiDA configuration folder.*:UserWarning',
     'ignore::DeprecationWarning:frozendict:',
     'ignore::DeprecationWarning:pkg_resources:',
     'ignore::DeprecationWarning:reentry:',
     'ignore::DeprecationWarning:sqlalchemy_utils:',
 ]
+minversion = '6.0'
+testpaths = [
+    'tests',
+]
+
+[tool.yapf]
+align_closing_bracket_with_visual_indent = true
+based_on_style = 'google'
+coalesce_brackets = true
+column_limit = 120
+dedent_closing_brackets = true
+indent_dictionary_value = false
+split_arguments_when_comma_terminated = true
 
 [tool.tox]
 legacy_tox_ini = """
 [tox]
-envlist = py37
+envlist = py38
 
 [testenv]
 usedevelop=True
 
-[testenv:py{36,37,38,39}]
+[testenv:py{38,39}]
 extras = tests
 commands = pytest {posargs}
 

@@ -4,7 +4,6 @@
     "classifiers": [
         "Framework :: AiiDA",
         "License :: OSI Approved :: MIT License",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Development Status :: 4 - Beta"
@@ -45,13 +44,13 @@
         "abipy>=0.8.0",
         "packaging",
         "psycopg2-binary~=2.8.3",
-	"pymatgen<=2022.0.11",
+        "pymatgen>=2022.1.20",
         "numpy",
         "importlib_resources"
     ],
     "license": "MIT License",
     "name": "aiida-abinit",
-    "python_requires": ">=3.7",
+    "python_requires": ">=3.8",
     "url": "https://github.com/sponce24/aiida-abinit",
     "version": "0.3.0"
 }

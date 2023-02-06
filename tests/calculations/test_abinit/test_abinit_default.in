@@ -1,5 +1,5 @@
 ##############################################
-####                SECTION: basic               
+####                SECTION: basic
 ##############################################
  ecut 18.0
  nstep 20
@@ -9,12 +9,15 @@
  nshiftk 1
  shiftk    0.0    0.0    0.0
 ##############################################
-####                SECTION: files               
+####                SECTION: files
 ##############################################
  pseudos "Si.psp8"
  pp_dirpath "./pseudo/"
+ indata_prefix "indata/in"
+ tmpdata_prefix "tmpdata/tmp"
+ outdata_prefix "outdata/out"
 ##############################################
-####                  STRUCTURE                  
+####                  STRUCTURE
 ##############################################
  natom 2
  ntypat 1

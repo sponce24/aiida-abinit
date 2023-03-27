@@ -22,7 +22,7 @@ classifiers = [
 keywords = ['aiida', 'abinit']
 requires-python = '>=3.8'
 dependencies = [
-    'aiida_core[atomic_tools]~=1.6.3,<3.0.0',
+    'aiida_core[atomic_tools]>=1.6.3,<3.0.0',
     'aiida-pseudo~=0.6.1',
     'abipy>=0.8.0',
     'packaging',

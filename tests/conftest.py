@@ -4,6 +4,7 @@
 import collections
 import io
 import os
+import pathlib
 import shutil
 import tempfile
 
@@ -110,12 +111,11 @@ def serialize_builder():
 
 
 @pytest.fixture(scope='session', autouse=True)
-def pseudo_dojo(aiida_profile, generate_psp8_data):
+@pytest.mark.usefixtures('aiida_profile_clean')
+def pseudo_dojo(generate_psp8_data):
     """Create an PseudoDojo pseudo potential family from scratch."""
     from aiida.common.constants import elements
     from aiida.plugins import GroupFactory, DataFactory
-
-    aiida_profile.reset_db()
 
     PseudoDojo = GroupFactory('pseudo.family.pseudo_dojo')  # pylint: disable=invalid-name
     Psp8Data = DataFactory('pseudo.psp8')
@@ -141,7 +141,7 @@ def pseudo_dojo(aiida_profile, generate_psp8_data):
             }
 
         label = 'PseudoDojo/0.4/PBE/SR/standard/psp8'
-        family = PseudoDojo.create_from_folder(dirpath, label, pseudo_type=Psp8Data)
+        family = PseudoDojo.create_from_folder(pathlib.Path(dirpath), label, pseudo_type=Psp8Data)
 
     family.set_cutoffs(cutoffs, stringency, unit='Ry')
 

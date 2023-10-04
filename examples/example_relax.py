@@ -23,7 +23,7 @@ def example_relax(code, pseudo_family):
 
     thisdir = os.path.dirname(os.path.realpath(__file__))
     structure = StructureData(pymatgen=pmg.core.Structure.from_file(os.path.join(thisdir, 'files', 'Si.cif')))
-    pseudo_family = Group.objects.get(label=pseudo_family)
+    pseudo_family = Group.collection.get(label=pseudo_family)
     pseudos = pseudo_family.get_pseudos(structure=structure)
 
     base_parameters_dict = {

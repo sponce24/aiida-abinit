@@ -1,7 +1,7 @@
 ---
 label: "abinit_9.6.2"
 description: "Abinit version 9.6.2"
-input_plugin: "abinit"
+default_calc_job_plugin: "abinit"
 on_computer: true
 remote_abs_path: "/YOUR_PATH/abinit_9.6.2/bin/abinit"
 computer: "localhost"
